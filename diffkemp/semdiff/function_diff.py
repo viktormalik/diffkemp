@@ -160,10 +160,8 @@ def functions_diff(mod_first, mod_second,
                 simplify_modules_diff(mod_first.llvm, mod_second.llvm,
                                       fun_first, fun_second,
                                       glob_var.name if glob_var else None,
-                                      glob_var.name if glob_var else "simpl",
-                                      config.control_flow_only,
-                                      config.print_asm_diffs,
-                                      config.verbosity)
+                                      config,
+                                      glob_var.name if glob_var else "simpl")
             funs_to_compare = list([o for o in objects_to_compare
                                     if o[0].diff_kind == "function"])
             if funs_to_compare and missing_defs:

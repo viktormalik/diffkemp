@@ -18,14 +18,13 @@ def add_suffix(file, suffix):
     return "{}-{}{}".format(name, suffix, ext)
 
 
-def simplify_modules_diff(first, second, fun_first, fun_second, var,
-                          suffix=None, control_flow_only=False,
-                          print_asm_diffs=False, verbose=False):
+def simplify_modules_diff(first, second, fun_first, fun_second,
+                          var, config, suffix=None):
     """
     Simplify modules to ease their semantic difference. Uses the SimpLL tool.
     """
     stderr = None
-    if not verbose:
+    if not config.verbosity:
         stderr = open(os.devnull, "w")
 
     first_out_name = add_suffix(first, suffix) if suffix else first
@@ -54,13 +53,23 @@ def simplify_modules_diff(first, second, fun_first, fun_second, var,
         if suffix:
             simpll_command.extend(["--suffix", suffix])
 
-        if control_flow_only:
-            simpll_command.append("--control-flow")
-
-        if print_asm_diffs:
+        if config.print_asm_diffs:
             simpll_command.append("--print-asm-diffs")
 
-        if verbose:
+        if "all" in config.enabled_patterns:
+            simpll_command.append("--enable-all-patterns")
+
+        if "all" in config.disabled_patterns:
+            simpll_command.append("--disable-all-patterns")
+
+        simpll_command.extend(
+            ["--enable-pattern-{}".format(p)
+             for p in config.enabled_patterns if p != "all"])
+        simpll_command.extend(
+            ["--disable-pattern-{}".format(p)
+             for p in config.disabled_patterns if p != "all"])
+
+        if config.verbosity:
             simpll_command.append("--verbose")
             print(" ".join(simpll_command))
 

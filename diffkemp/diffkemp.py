@@ -1,4 +1,4 @@
-from argparse import ArgumentParser, SUPPRESS
+import diffkemp.cli
 from diffkemp.config import Config
 from diffkemp.function_list import FunctionList
 from diffkemp.llvm_ir.kernel_module import KernelParam, LlvmKernelModule
@@ -13,77 +13,9 @@ import shutil
 import sys
 
 
-def __make_argument_parser():
-    """Parsing CLI arguments."""
-    ap = ArgumentParser(description="Checking equivalence of semantics of "
-                                    "kernel functions.")
-    ap.add_argument("-v", "--verbose",
-                    help="increase output verbosity",
-                    action="store_true")
-    sub_ap = ap.add_subparsers(dest="command", metavar="command")
-    sub_ap.required = True
-
-    # "generate" sub-command
-    generate_ap = sub_ap.add_parser("generate",
-                                    help="generate snapshot of kernel "
-                                         "functions")
-    generate_ap.add_argument("kernel_dir",
-                             help="kernel root directory")
-    generate_ap.add_argument("output_dir",
-                             help="output directory of the snapshot")
-    generate_ap.add_argument("functions_list",
-                             help="list of functions to compare")
-    generate_ap.add_argument("--sysctl", action="store_true",
-                             help="function list is a list of function "
-                                  "parameters")
-    generate_ap.set_defaults(func=generate)
-
-    # "compare" sub-command
-    compare_ap = sub_ap.add_parser("compare",
-                                   help="compare generated snapshots for "
-                                        "semantic equality")
-    compare_ap.add_argument("snapshot_dir_old",
-                            help="directory with the old snapshot")
-    compare_ap.add_argument("snapshot_dir_new",
-                            help="directory with the new snapshot")
-    compare_ap.add_argument("--show-diff",
-                            help="show diff for non-equal functions",
-                            action="store_true")
-    compare_ap.add_argument("--regex-filter",
-                            help="filter function diffs by given regex")
-    compare_ap.add_argument("--output-dir", "-o",
-                            help="name of the output directory")
-    compare_ap.add_argument("--stdout", help="print results to stdout",
-                            action="store_true")
-    compare_ap.add_argument("--report-stat",
-                            help="report statistics of the analysis",
-                            action="store_true")
-    compare_ap.add_argument("--kernel-dirs",
-                            nargs=2,
-                            help="specify root dirs for the compared kernels")
-    compare_ap.add_argument("--function", "-f",
-                            help="compare only selected function")
-    compare_ap.add_argument("--control-flow-only",
-                            help=SUPPRESS,
-                            action="store_true")
-    compare_ap.add_argument("--print-asm-diffs",
-                            help="print raw inline assembly differences (does \
-                            not apply to macros)",
-                            action="store_true")
-    compare_ap.add_argument("--semdiff-tool",
-                            help=SUPPRESS,
-                            choices=["llreve"])
-    compare_ap.add_argument("--show-errors",
-                            help="show functions that are either unknown or \
-                            ended with an error in statistics",
-                            action="store_true")
-    compare_ap.set_defaults(func=compare)
-    return ap
-
-
 def run_from_cli():
     """Main method to run the tool."""
-    ap = __make_argument_parser()
+    ap = diffkemp.cli.make_argument_parser()
     args = ap.parse_args()
     args.func(args)
 
@@ -250,7 +182,8 @@ def compare(args):
         new_functions.filter([args.function])
 
     config = Config(old_source, new_source, args.show_diff,
-                    args.control_flow_only, args.print_asm_diffs, args.verbose,
+                    args.enable_pattern, args.disable_pattern,
+                    args.print_asm_diffs, args.verbose,
                     args.semdiff_tool)
     result = Result(Result.Kind.NONE, args.snapshot_dir_old,
                     args.snapshot_dir_old)

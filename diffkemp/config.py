@@ -8,7 +8,8 @@ class ConfigException(Exception):
 
 class Config:
     def __init__(self, source_first, source_second, show_diff,
-                 control_flow_only, print_asm_diffs, verbosity, semdiff_tool):
+                 enabled_patterns, disabled_patterns, print_asm_diffs,
+                 verbosity, semdiff_tool):
         """
         Store configuration of DiffKemp
         :param source_first: Sources for the first kernel (instance of
@@ -23,7 +24,8 @@ class Config:
         self.source_first = source_first
         self.source_second = source_second
         self.show_diff = show_diff
-        self.control_flow_only = control_flow_only
+        self.enabled_patterns = enabled_patterns
+        self.disabled_patterns = disabled_patterns
         self.print_asm_diffs = print_asm_diffs
         self.verbosity = verbosity
 
