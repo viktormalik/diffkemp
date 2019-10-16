@@ -88,7 +88,7 @@ PreservedAnalyses
                     newCall->setDebugLoc(CallInstr->getDebugLoc());
                     CallInstr->replaceAllUsesWith(newCall);
                     toRemove.push_back(&Instr);
-                } else if (isPrintFunction(CalledFun->getName())) {
+                } else if (isKernelPrintFunction(CalledFun->getName())) {
                     // Functions with 2 mandatory arguments
                     auto Op0Type = dyn_cast<PointerType>(
                             CallInstr->getOperand(0)->getType());
@@ -107,10 +107,7 @@ PreservedAnalyses
 
                 // Replace the second argument of a call to warn_slowpath_null
                 // by 0 (it is a line number).
-                if (CalledFun->getName() == "warn_slowpath_null"
-                    || CalledFun->getName() == "warn_slowpath_fmt"
-                    || CalledFun->getName() == "__might_sleep"
-                    || CalledFun->getName() == "acpi_ut_predefined_warning") {
+                if (isKernelWarnFunction(CalledFun->getName())) {
                     replaceArgByNull(CallInstr, 0);
                     replaceArgByZero(CallInstr, 1);
                 }
@@ -122,4 +119,27 @@ PreservedAnalyses
     toRemove.clear();
 
     return PreservedAnalyses();
+}
+
+/// Returns true when the argument is a name of a kernel print function.
+bool isKernelPrintFunction(const std::string &name) {
+    const static std::set<std::string> List = {
+            "_dev_info", "dev_warn", "dev_err", "sprintf", "printk"};
+
+    return List.find(name) != List.end();
+}
+
+/// Returns true when the argument is a name of a kernel warning function.
+bool isKernelWarnFunction(const std::string &name) {
+    const static std::set<std::string> List = {"warn_slowpath_null",
+                                               "warn_slowpath_fmt",
+                                               "__might_sleep",
+                                               "acpi_ut_predefined_warning"};
+
+    return List.find(name) != List.end();
+}
+
+/// Returns true when the argument is a name of a kernel-specific function.
+bool isKernelSimplifiedFunction(const std::string &name) {
+    return isKernelPrintFunction(name) || isKernelWarnFunction(name);
 }

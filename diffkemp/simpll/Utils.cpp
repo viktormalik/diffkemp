@@ -340,14 +340,6 @@ std::string getSourceFilePath(DIScope *Scope) {
     return joinPath(Scope->getDirectory(), Scope->getFilename());
 }
 
-/// Returns true when the argument is a name of a kernel print function.
-bool isPrintFunction(std::string name) {
-    const static std::set<std::string> List = {
-            "_dev_info", "dev_warn", "dev_err", "sprintf", "printk"};
-
-    return List.find(name) != List.end();
-}
-
 /// Checks whether the character is valid for a C identifier.
 bool isValidCharForIdentifier(char ch) {
     if ((ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z')

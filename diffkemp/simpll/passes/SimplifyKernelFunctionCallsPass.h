@@ -27,4 +27,13 @@ class SimplifyKernelFunctionCallsPass
     PreservedAnalyses run(Function &Fun, FunctionAnalysisManager &fam);
 };
 
+/// Returns true when the argument is a name of a kernel print function.
+bool isKernelPrintFunction(const std::string &name);
+
+/// Returns true when the argument is a name of a kernel warning function.
+bool isKernelWarnFunction(const std::string &name);
+
+/// Returns true when the argument is a name of a kernel-specific function.
+bool isKernelSimplifiedFunction(const std::string &name);
+
 #endif // DIFFKEMP_SIMPLL_SIMPLIFYKERNELFUNCTIONCALLSPASS_H

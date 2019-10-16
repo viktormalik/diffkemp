@@ -113,9 +113,6 @@ CallInst *findCallInst(const CallInst *Call, Function *Fun);
 /// Gets C source file from a DIScope and the module.
 std::string getSourceFilePath(DIScope *Scope);
 
-/// Returns true when the argument is a name of a kernel print function.
-bool isPrintFunction(std::string name);
-
 /// Checks whether the character is valid for a C identifier.
 bool isValidCharForIdentifier(char ch);
 
