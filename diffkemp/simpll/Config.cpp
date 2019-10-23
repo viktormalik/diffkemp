@@ -32,9 +32,6 @@ cl::opt<std::string>
         SuffixOpt("suffix",
                   cl::value_desc("suffix"),
                   cl::desc("Add suffix to names of simplified files."));
-cl::opt<bool> ControlFlowOpt(
-        "control-flow",
-        cl::desc("Only keep instructions related to the control-flow."));
 cl::opt<bool> PrintCallstacksOpt(
         "print-callstacks",
         cl::desc("Print call stacks for non-equal functions."));
@@ -45,6 +42,77 @@ cl::opt<bool> PrintAsmDiffsOpt(
         "print-asm-diffs",
         cl::desc("Print raw differences in inline assembly code "
                  "(does not apply to macros)."));
+// Syntax patterns options
+cl::opt<bool> DisableAllPatterns(
+        "disable-all-patterns",
+        cl::desc(
+                "Do not treat any syntactic difference as semantically equal"));
+cl::opt<bool> EnableAllPatterns(
+        "enable-all-patterns",
+        cl::desc("Treat all supported patterns of syntactic differences as "
+                 "semantically equal"));
+cl::opt<bool> EnablePatternStructAlignment(
+        "enable-pattern-struct-alignment",
+        cl::desc("Treat differences in alignments of structures that do not "
+                 "affect the accessed fields as semantically equal"));
+cl::opt<bool> DisablePatternStructAlignment(
+        "disable-pattern-struct-alignment",
+        cl::desc("Always treat differences in alignments of structures as "
+                 "semantically different"));
+cl::opt<bool> EnablePatternFunctionSplits(
+        "enable-pattern-function-splits",
+        cl::desc("Treat differences caused by splitting code into functions as"
+                 " semantically equal"));
+cl::opt<bool> DisablePatternFunctionSplits(
+        "disable-pattern-function-splits",
+        cl::desc("Treat differences caused by splitting code into functions as"
+                 " semantically different"));
+cl::opt<bool> EnablePatternUnusedReturnTypes(
+        "enable-pattern-unused-returns",
+        cl::desc("Treat differences caused by changing an unused return type "
+                 "to void as semantically equal"));
+cl::opt<bool> DisablePatternUnusedReturnTypes(
+        "disable-pattern-unused-returns",
+        cl::desc("Treat differences caused by changing an unused return type "
+                 "to void as semantically different"));
+cl::opt<bool> EnablePatternKernelPrints(
+        "enable-pattern-kernel-prints",
+        cl::desc("Treat differences caused by changes in calls to kernel print"
+                 " functions as semantically equal"));
+cl::opt<bool> DisablePatternKernelPrints(
+        "disable-pattern-kernel-prints",
+        cl::desc("Treat differences caused by changes in calls to kernel print"
+                 " functions as semantically different"));
+cl::opt<bool> EnablePatternDeadCode(
+        "enable-pattern-dead-code",
+        cl::desc("Treat differences located in dead code as semantically "
+                 "equal"));
+cl::opt<bool> DisablePatternDeadCode(
+        "disable-pattern-dead-code",
+        cl::desc("Treat differences located in dead code as semantically "
+                 "different"));
+cl::opt<bool> EnablePatternNumericalMacros(
+        "enable-pattern-numerical-macros",
+        cl::desc("Treat differences caused by change of a value of a numerical"
+                 " macro as semantically equal"));
+cl::opt<bool> DisablePatternNumericalMacros(
+        "disable-pattern-numerical-macros",
+        cl::desc("Treat differences caused by change of a value of a numerical"
+                 " macro as semantically different"));
+cl::opt<bool> EnablePatternTypeCasts(
+        "enable-pattern-type-casts",
+        cl::desc("Treat differences in type casts as semantically equal"));
+cl::opt<bool> DisablePatternTypeCasts(
+        "disable-pattern-type-casts",
+        cl::desc("Treat differences in type casts as semantically different"));
+cl::opt<bool> EnablePatternControlFlowOnly(
+        "enable-pattern-control-flow-only",
+        cl::desc("Treat differences not caused by control flow related "
+                 "operations as semantically equal"));
+cl::opt<bool> DisablePatternControlFlowOnly(
+        "disable-pattern-control-flow-only",
+        cl::desc("Treat differences not caused by control flow related "
+                 "operations as semantically different"));
 
 /// Add suffix to the file name.
 /// \param File Original file name.
@@ -60,9 +128,7 @@ Config::Config()
         : First(parseIRFile(FirstFileOpt, err, context_first)),
           Second(parseIRFile(SecondFileOpt, err, context_second)),
           FirstOutFile(FirstFileOpt), SecondOutFile(SecondFileOpt),
-          PatternControlFlowOnly(ControlFlowOpt),
-          PrintAsmDiffs(PrintAsmDiffsOpt),
-          PrintCallStacks(PrintCallstacksOpt) {
+          PrintAsmDiffs(PrintAsmDiffsOpt), PrintCallStacks(PrintCallstacksOpt) {
     if (!FunctionOpt.empty()) {
         // Parse --fun option - find functions with given names.
         // The option can be either single function name (same for both modules)
@@ -96,6 +162,68 @@ Config::Config()
         DebugFlag = true;
         setCurrentDebugType(DEBUG_SIMPLL);
     }
+
+    // Set semantic patterns. Priorities are as follows:
+    // 1. Explicit disablement of a single pattern.
+    // 2. Explicit enablement of a single pattern.
+    // 3. Explicit disablement of all patterns.
+    // 4. Explicit enablement of all patterns.
+    // 5. Default settings (see Config.h)
+    if (EnableAllPatterns) {
+        PatternStructAlignment = true;
+        PatternFunctionSplits = true;
+        PatternUnusedReturnTypes = true;
+        PatternKernelPrints = true;
+        PatternDeadCode = true;
+        PatternNumericalMacros = true;
+        PatternTypeCasts = true;
+        PatternControlFlowOnly = true;
+    }
+    if (DisableAllPatterns) {
+        PatternStructAlignment = false;
+        PatternFunctionSplits = false;
+        PatternUnusedReturnTypes = false;
+        PatternKernelPrints = false;
+        PatternDeadCode = false;
+        PatternNumericalMacros = false;
+        PatternTypeCasts = false;
+        PatternControlFlowOnly = false;
+    }
+    if (EnablePatternStructAlignment)
+        PatternStructAlignment = true;
+    if (DisablePatternStructAlignment)
+        PatternStructAlignment = false;
+    if (EnablePatternFunctionSplits)
+        PatternFunctionSplits = true;
+    if (DisablePatternFunctionSplits)
+        PatternFunctionSplits = false;
+    if (EnablePatternUnusedReturnTypes)
+        PatternUnusedReturnTypes = true;
+    if (DisablePatternUnusedReturnTypes)
+        PatternUnusedReturnTypes = false;
+    if (EnablePatternKernelPrints)
+        PatternKernelPrints = true;
+    if (DisablePatternKernelPrints)
+        PatternKernelPrints = false;
+    if (EnablePatternDeadCode)
+        PatternDeadCode = true;
+    if (DisablePatternDeadCode)
+        PatternDeadCode = false;
+    if (EnablePatternNumericalMacros)
+        PatternNumericalMacros = true;
+    if (DisablePatternNumericalMacros)
+        PatternNumericalMacros = false;
+    if (EnablePatternTypeCasts)
+        PatternTypeCasts = true;
+    if (DisablePatternTypeCasts)
+        PatternTypeCasts = false;
+    if (EnablePatternControlFlowOnly) {
+        PatternControlFlowOnly = true;
+        // Turning on control-flow-only automatically turns on type casts
+        PatternTypeCasts = true;
+    }
+    if (DisablePatternControlFlowOnly)
+        PatternControlFlowOnly = false;
 }
 
 void Config::refreshFunctions() {
