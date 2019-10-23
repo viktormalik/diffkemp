@@ -47,7 +47,7 @@ void ModuleComparator::compareFunctions(Function *FirstFun,
         if (hasSuffix(SecondFunName))
             SecondFunName = dropSuffix(SecondFunName);
 
-        if (controlFlowOnly) {
+        if (config.PatternControlFlowOnly) {
             // If checking control flow only, it suffices that one of the
             // functions is a declaration to treat them equal.
             if (FirstFunName == SecondFunName)
@@ -86,8 +86,7 @@ void ModuleComparator::compareFunctions(Function *FirstFun,
     }
 
     // Comparing functions with bodies using custom FunctionComparator.
-    DifferentialFunctionComparator fComp(
-            FirstFun, SecondFun, controlFlowOnly, showAsmDiffs, DI, this);
+    DifferentialFunctionComparator fComp(FirstFun, SecondFun, config, DI, this);
     int result = fComp.compare();
 
     DEBUG_WITH_TYPE(DEBUG_SIMPLL, decreaseDebugIndentLevel());
@@ -100,6 +99,8 @@ void ModuleComparator::compareFunctions(Function *FirstFun,
                         dbgs() << getDebugIndent()
                                << "Functions are not equal\n");
         ComparedFuns.at({FirstFun, SecondFun}) = Result::NOT_EQUAL;
+        if (!config.PatternFunctionSplits)
+            return;
         while (tryInline.first || tryInline.second) {
             DEBUG_WITH_TYPE(DEBUG_SIMPLL, increaseDebugIndentLevel());
 
@@ -188,12 +189,8 @@ void ModuleComparator::compareFunctions(Function *FirstFun,
             // Reset the function diff result
             ComparedFuns.at({FirstFun, SecondFun}) = Result::UNKNOWN;
             // Re-run the comparison
-            DifferentialFunctionComparator fCompSecond(FirstFun,
-                                                       SecondFun,
-                                                       controlFlowOnly,
-                                                       showAsmDiffs,
-                                                       DI,
-                                                       this);
+            DifferentialFunctionComparator fCompSecond(
+                    FirstFun, SecondFun, config, DI, this);
             result = fCompSecond.compare();
             // If the functions are equal after the inlining, we do not want to
             // report the called functions as unequal in case they are compared

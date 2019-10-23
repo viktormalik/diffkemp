@@ -15,6 +15,7 @@
 #ifndef DIFFKEMP_SIMPLL_DEBUGINFO_H
 #define DIFFKEMP_SIMPLL_DEBUGINFO_H
 
+#include "Config.h"
 #include "Utils.h"
 #include <llvm/IR/DebugInfo.h>
 #include <llvm/IR/Instructions.h>
@@ -41,15 +42,18 @@ class DebugInfo {
               Function *funFirst,
               Function *funSecond,
               std::set<const Function *> &CalledFirst,
-              std::set<const Function *> &CalledSecond)
+              std::set<const Function *> &CalledSecond,
+              const Config &config)
             : FunFirst(funFirst), FunSecond(funSecond), ModFirst(modFirst),
               ModSecond(modSecond), CalledFirst(CalledFirst),
               CalledSecond(CalledSecond) {
         DebugInfoFirst.processModule(ModFirst);
         DebugInfoSecond.processModule(ModSecond);
         // Use debug info to gather useful information
-        calculateGEPIndexAlignments();
-        calculateMacroAlignments();
+        if (config.PatternStructAlignment)
+            calculateGEPIndexAlignments();
+        if (config.PatternNumericalMacros)
+            calculateMacroAlignments();
         collectLocalVariables(CalledFirst, LocalVariableMapL);
         collectLocalVariables(CalledSecond, LocalVariableMapR);
         // Remove calls to debug info intrinsics from the functions - it may

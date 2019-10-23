@@ -36,7 +36,7 @@ using namespace llvm;
 void preprocessModule(Module &Mod,
                       Function *Main,
                       GlobalVariable *Var,
-                      bool ControlFlowOnly);
+                      const Config &Config);
 
 /// Structure to represent the output value of simplifyModulesDiff containing
 /// several vectors that are all outputs of ModuleComparator.

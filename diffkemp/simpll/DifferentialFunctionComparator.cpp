@@ -36,6 +36,8 @@ std::set<std::string> ignoredMacroList = {
 int DifferentialFunctionComparator::cmpGEPs(const GEPOperator *GEPL,
                                             const GEPOperator *GEPR) const {
     int OriginalResult = FunctionComparator::cmpGEPs(GEPL, GEPR);
+    if (!config.PatternStructAlignment)
+        return OriginalResult;
 
     if (OriginalResult == 0)
         // The original function says the GEPs are equal - return the value
@@ -239,7 +241,8 @@ int DifferentialFunctionComparator::cmpOperations(
                 if (CalledL->getName() == CalledR->getName()) {
                     // Check whether both instructions call an alloc function.
                     if (isAllocFunction(*CalledL)) {
-                        if (!cmpAllocs(CL, CR)) {
+                        if (config.PatternStructAlignment
+                            && !cmpAllocs(CL, CR)) {
                             needToCmpOperands = false;
                             return 0;
                         }
@@ -247,13 +250,14 @@ int DifferentialFunctionComparator::cmpOperations(
 
                     if (CalledL->getIntrinsicID() == Intrinsic::memset
                         && CalledR->getIntrinsicID() == Intrinsic::memset) {
-                        if (!cmpMemset(CL, CR)) {
+                        if (config.PatternStructAlignment
+                            && !cmpMemset(CL, CR)) {
                             needToCmpOperands = false;
                             return 0;
                         }
                     }
 
-                    if (Result && controlFlowOnly
+                    if (Result && config.PatternControlFlowOnly
                         && abs(CL->getNumOperands() - CR->getNumOperands())
                                    == 1) {
                         needToCmpOperands = false;
@@ -282,9 +286,9 @@ int DifferentialFunctionComparator::cmpOperations(
         }
     }
     if (Result) {
-        // Do not make difference between signed and unsigned for control flow
-        // only
-        if (controlFlowOnly && isa<ICmpInst>(L) && isa<ICmpInst>(R)) {
+        // Do not make difference between signed and unsigned when ignoring
+        // type casts.
+        if (config.PatternTypeCasts && isa<ICmpInst>(L) && isa<ICmpInst>(R)) {
             auto *ICmpL = dyn_cast<ICmpInst>(L);
             auto *ICmpR = dyn_cast<ICmpInst>(R);
             if (ICmpL->getUnsignedPredicate()
@@ -293,7 +297,8 @@ int DifferentialFunctionComparator::cmpOperations(
             }
         }
         // Handle alloca of a structure type with changed layout
-        if (isa<AllocaInst>(L) && isa<AllocaInst>(R)) {
+        if (config.PatternStructAlignment && isa<AllocaInst>(L)
+            && isa<AllocaInst>(R)) {
             StructType *TypeL = dyn_cast<StructType>(
                     dyn_cast<AllocaInst>(L)->getAllocatedType());
             StructType *TypeR = dyn_cast<StructType>(
@@ -515,6 +520,7 @@ int DifferentialFunctionComparator::cmpStructTypeSizeWithConstant(
 
 /// Handle comparing of memory allocation function in cases where the size
 /// of the composite type is different.
+/// Note: this should only be called if config.HandleStructAlignment is true.
 int DifferentialFunctionComparator::cmpAllocs(const CallInst *CL,
                                               const CallInst *CR) const {
     // Look whether the sizes for allocation match. If yes, then return zero
@@ -550,7 +556,7 @@ int DifferentialFunctionComparator::cmpAllocs(const CallInst *CL,
 /// Check if the given operation can be ignored (it does not affect semantics)
 /// for control flow only diffs.
 bool DifferentialFunctionComparator::mayIgnore(const User *Inst) const {
-    if (controlFlowOnly)
+    if (config.PatternTypeCasts)
         return isa<AllocaInst>(Inst) || isCast(Inst);
     else {
         if (isa<AllocaInst>(Inst))
@@ -736,8 +742,7 @@ bool DifferentialFunctionComparator::cmpCallArgumentUsingCSource(
     return 1;
 }
 
-/// Detect cast instructions and ignore them when comparing the control flow
-/// only.
+/// Detect cast instructions and ignore them when ignoring type casts is on.
 /// Note: this function was copied from FunctionComparator.
 int DifferentialFunctionComparator::cmpBasicBlocks(
         const BasicBlock *BBL, const BasicBlock *BBR) const {
@@ -796,7 +801,7 @@ int DifferentialFunctionComparator::cmpBasicBlocks(
 
                         // Try to find assembly functions causing the difference
                         if (isa<CallInst>(&*InstL) && isa<CallInst>(&*InstR)
-                            && showAsmDiff) {
+                            && config.PrintAsmDiffs) {
                             auto asmDiffs = findAsmDifference(
                                     dyn_cast<CallInst>(&*InstL),
                                     dyn_cast<CallInst>(&*InstR));
@@ -986,6 +991,7 @@ bool DifferentialFunctionComparator::accumulateAllOffsets(
 }
 
 /// Specific comparing of structure field access.
+/// Note: this should only be called if config.HandleStructAlignment is true.
 int DifferentialFunctionComparator::cmpFieldAccess(const Function *L,
                                                    const Function *R) const {
     // First compute the complete offset of all GEPs in both functions.
@@ -1014,13 +1020,12 @@ int DifferentialFunctionComparator::cmpFieldAccess(const Function *L,
 
 /// Handle values generated from macros and enums whose value changed.
 /// The new values are pre-computed by DebugInfo.
-/// Also handles comparing in case at least one of the values is a cast -
-/// when comparing the control flow only, it compares the original value instead
-/// of the cast.
+/// Also handles ignoring of type casts - when this feature is turned on, it
+/// compares the original value instead of the cast.
 int DifferentialFunctionComparator::cmpValues(const Value *L,
                                               const Value *R) const {
-    // Detect casts and use the original value instead when comparing the
-    // control flow only.
+    // Detect casts and use the original value instead when ignoring the type
+    // casts.
     const User *UL = dyn_cast<User>(L);
     const User *UR = dyn_cast<User>(R);
     const User *CL = (UL && isCast(UL)) ? UL : nullptr;
@@ -1070,7 +1075,7 @@ int DifferentialFunctionComparator::cmpValues(const Value *L,
 }
 
 /// Specific comparing of constants. If one of them (or both) is a cast
-/// constant expression, compare its operand.
+/// constant expression and ignoring casts is turned on, compare its operand.
 int DifferentialFunctionComparator::cmpConstants(const Constant *L,
                                                  const Constant *R) const {
     int Result = FunctionComparator::cmpConstants(L, R);
@@ -1078,7 +1083,7 @@ int DifferentialFunctionComparator::cmpConstants(const Constant *L,
     if (Result == 0)
         return Result;
 
-    if (controlFlowOnly) {
+    if (config.PatternTypeCasts) {
         // Look whether the constants is a cast ConstantExpr
         const ConstantExpr *UEL = dyn_cast<ConstantExpr>(L);
         const ConstantExpr *UER = dyn_cast<ConstantExpr>(R);
@@ -1139,14 +1144,14 @@ int DifferentialFunctionComparator::cmpCallsWithExtraArg(
     return 1;
 }
 
-/// Compares array types with equivalent element types as equal when
-/// comparing the control flow only.
+/// Specific comparison of unions, integer, and array types when specific
+/// semantic patterns are allowed.
 int DifferentialFunctionComparator::cmpTypes(Type *L, Type *R) const {
     // Compare union as equal to another type in case it is at least of the same
     // size.
     // Note: a union type is represented in Clang-generated LLVM IR by a
     // structure type.
-    if (L->isStructTy() || R->isStructTy()) {
+    if (config.PatternStructAlignment && (L->isStructTy() || R->isStructTy())) {
         Type *Ty;
         StructType *StrTy;
         const DataLayout *TyLayout, *StrTyLayout;
@@ -1170,14 +1175,14 @@ int DifferentialFunctionComparator::cmpTypes(Type *L, Type *R) const {
     }
 
     // Compare integer types (except the boolean type) as the same when
-    // comparing the control flow only.
-    if (L->isIntegerTy() && R->isIntegerTy() && controlFlowOnly) {
+    // ignoring the type casts.
+    if (config.PatternTypeCasts && L->isIntegerTy() && R->isIntegerTy()) {
         if (L->getIntegerBitWidth() == 1 || R->getIntegerBitWidth() == 1)
             return !(L->getIntegerBitWidth() == R->getIntegerBitWidth());
         return 0;
     }
 
-    if (!L->isArrayTy() || !R->isArrayTy() || !controlFlowOnly)
+    if (!config.PatternControlFlowOnly || !L->isArrayTy() || !R->isArrayTy())
         return FunctionComparator::cmpTypes(L, R);
 
     ArrayType *AL = dyn_cast<ArrayType>(L);
@@ -1186,11 +1191,11 @@ int DifferentialFunctionComparator::cmpTypes(Type *L, Type *R) const {
     return cmpTypes(AL->getElementType(), AR->getElementType());
 }
 
-/// Do not compare bitwidth when comparing the control flow only.
+/// Do not compare integer bitwidth when ignoring the type casts.
 int DifferentialFunctionComparator::cmpAPInts(const APInt &L,
                                               const APInt &R) const {
     int Result = FunctionComparator::cmpAPInts(L, R);
-    if (!controlFlowOnly || !Result) {
+    if (!config.PatternTypeCasts || !Result) {
         return Result;
     } else {
         // The function ugt uses APInt::compare, which can compare only integers
@@ -1205,6 +1210,7 @@ int DifferentialFunctionComparator::cmpAPInts(const APInt &L,
 /// Comparison of memset functions.
 /// Handles situation when memset sets the memory occupied by a structure, but
 /// the structure size changed.
+/// Note: this should only be called if config.HandleStructAlignment is true.
 int DifferentialFunctionComparator::cmpMemset(const CallInst *CL,
                                               const CallInst *CR) const {
     // Compare all except the third operand (size to set).

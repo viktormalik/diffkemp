@@ -37,14 +37,9 @@ int main(int argc, const char **argv) {
     Config config;
 
     // Run transformations
-    preprocessModule(*config.First,
-                     config.FirstFun,
-                     config.FirstVar,
-                     config.ControlFlowOnly);
-    preprocessModule(*config.Second,
-                     config.SecondFun,
-                     config.SecondVar,
-                     config.ControlFlowOnly);
+    preprocessModule(*config.First, config.FirstFun, config.FirstVar, config);
+    preprocessModule(
+            *config.Second, config.SecondFun, config.SecondVar, config);
     config.refreshFunctions();
 
     ComparisonResult Result;

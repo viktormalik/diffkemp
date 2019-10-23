@@ -60,7 +60,8 @@ Config::Config()
         : First(parseIRFile(FirstFileOpt, err, context_first)),
           Second(parseIRFile(SecondFileOpt, err, context_second)),
           FirstOutFile(FirstFileOpt), SecondOutFile(SecondFileOpt),
-          ControlFlowOnly(ControlFlowOpt), PrintAsmDiffs(PrintAsmDiffsOpt),
+          PatternControlFlowOnly(ControlFlowOpt),
+          PrintAsmDiffs(PrintAsmDiffsOpt),
           PrintCallStacks(PrintCallstacksOpt) {
     if (!FunctionOpt.empty()) {
         // Parse --fun option - find functions with given names.

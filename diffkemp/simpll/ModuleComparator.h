@@ -15,6 +15,7 @@
 #ifndef DIFFKEMP_SIMPLL_MODULECOMPARATOR_H
 #define DIFFKEMP_SIMPLL_MODULECOMPARATOR_H
 
+#include "Config.h"
 #include "DebugInfo.h"
 #include "Utils.h"
 #include "passes/StructureDebugInfoAnalysis.h"
@@ -90,7 +91,8 @@ struct TypeDifference : public NonFunctionDifference {
 class ModuleComparator {
     Module &First;
     Module &Second;
-    bool controlFlowOnly, showAsmDiffs;
+
+    const Config &config;
 
   public:
     /// Possible results of syntactical function comparison.
@@ -118,15 +120,13 @@ class ModuleComparator {
 
     ModuleComparator(Module &First,
                      Module &Second,
-                     bool controlFlowOnly,
-                     bool showAsmDiffs,
+                     const Config &config,
                      const DebugInfo *DI,
                      StructureSizeAnalysis::Result &StructSizeMapL,
                      StructureSizeAnalysis::Result &StructSizeMapR,
                      StructureDebugInfoAnalysis::Result &StructDIMapL,
                      StructureDebugInfoAnalysis::Result &StructDIMapR)
-            : First(First), Second(Second), controlFlowOnly(controlFlowOnly),
-              showAsmDiffs(showAsmDiffs), DI(DI),
+            : First(First), Second(Second), config(config), DI(DI),
               StructSizeMapL(StructSizeMapL), StructSizeMapR(StructSizeMapR),
               StructDIMapL(StructDIMapL), StructDIMapR(StructDIMapR) {}
 
