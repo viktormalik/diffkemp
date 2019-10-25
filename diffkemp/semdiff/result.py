@@ -93,13 +93,13 @@ class Result:
         if show_errors:
             if unkwn > 0:
                 print("\nFunctions that are unknown: ")
-                for f, r in iter(self.inner.items()):
+                for f, r in sorted(self.inner.items()):
                     if r.kind == Result.Kind.UNKNOWN:
                         print(f)
                 print()
             if errs > 0:
                 print("\nFunctions whose comparison ended with an error: ")
-                for f, r in iter(self.inner.items()):
+                for f, r in sorted(self.inner.items()):
                     if r.kind == Result.Kind.ERROR:
                         print(f)
                 print()

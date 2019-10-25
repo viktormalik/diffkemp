@@ -333,7 +333,8 @@ def print_syntax_diff(snapshot_old, snapshot_new, fun, fun_result, fun_tag,
                 output.write(text_indent("{}:\n".format(fun), initial_indent))
             indent = initial_indent + 4
 
-        for called_res in fun_result.inner.values():
+        for called_res in sorted(fun_result.inner.values(),
+                                 key=lambda r: r.first.name):
             if called_res.diff == "" and called_res.first.covered:
                 # Do not print empty diffs
                 continue
