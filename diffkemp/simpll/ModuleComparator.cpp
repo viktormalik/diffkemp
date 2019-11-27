@@ -15,6 +15,7 @@
 #include "ModuleComparator.h"
 #include "Config.h"
 #include "DifferentialFunctionComparator.h"
+#include "SourceCodeUtils.h"
 #include "Utils.h"
 #include "passes/FieldAccessFunctionGenerator.h"
 #include "passes/FunctionAbstractionsGenerator.h"
@@ -89,6 +90,8 @@ void ModuleComparator::compareFunctions(Function *FirstFun,
     // Comparing functions with bodies using custom FunctionComparator.
     DifferentialFunctionComparator fComp(FirstFun, SecondFun, config, DI, this);
     int result = fComp.compare();
+
+    analysedLoc += std::max(countLoc(*FirstFun), countLoc(*SecondFun));
 
     DEBUG_WITH_TYPE(DEBUG_SIMPLL, decreaseDebugIndentLevel());
     if (result == 0) {

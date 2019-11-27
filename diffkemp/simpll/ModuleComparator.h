@@ -113,6 +113,9 @@ class ModuleComparator {
     // Counter of assembly diffs
     int asmDifferenceCounter = 0;
 
+    /// Number of total LOC analysed (sum of LOC of all compared functions).
+    unsigned analysedLoc = 0;
+
     std::vector<ConstFunPair> MissingDefs;
 
     /// DebugInfo class storing results from analysing debug information

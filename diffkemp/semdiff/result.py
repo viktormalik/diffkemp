@@ -46,6 +46,7 @@ class Result:
         self.second = Result.Entity(second_name)
         self.diff = None
         self.macro_diff = None
+        self.analysed_loc = 0
         self.inner = dict()
 
     def __str__(self):
@@ -60,6 +61,7 @@ class Result:
         # The current result is joined with the inner result (the result with
         # a higher priority is chosen from the two).
         self.kind = Result.Kind(max(int(self.kind), int(result.kind)))
+        self.analysed_loc = self.analysed_loc + result.analysed_loc
 
     def report_symbol_stat(self, show_errors=False):
         """
@@ -161,8 +163,14 @@ class Result:
         print("Empty diffs:             {0} ({1:.0f}%)".format(empty,
               empty / total * 100))
 
+    def report_loc(self):
+        """Report number of analysed lines of code."""
+        print("Total LOC analysed: {}".format(self.analysed_loc))
+
     def report_stat(self, show_errors=False):
         """Reports all statistics."""
         self.report_symbol_stat(show_errors)
         print("")
         self.report_object_stat()
+        print("")
+        self.report_loc()
