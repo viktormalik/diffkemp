@@ -100,8 +100,6 @@ void ModuleComparator::compareFunctions(Function *FirstFun,
                         dbgs() << getDebugIndent()
                                << "Functions are not equal\n");
         ComparedFuns.at({FirstFun, SecondFun}) = Result::NOT_EQUAL;
-        if (!config.PatternFunctionSplits)
-            return;
         while (tryInline.first || tryInline.second) {
             DEBUG_WITH_TYPE(DEBUG_SIMPLL, increaseDebugIndentLevel());
 
@@ -119,6 +117,17 @@ void ModuleComparator::compareFunctions(Function *FirstFun,
                     !inlineSecond
                             ? nullptr
                             : getCalledFunction(inlineSecond->getCalledValue());
+            // When the FunctionSplits pattern is disabled, only inline field
+            // access abstractions.
+            if (config.PatternFunctionSplits) {
+                if (InlinedFunFirst
+                    && !isSimpllFieldAccessAbstraction(InlinedFunFirst))
+                    inlineFirst = nullptr;
+                if (InlinedFunSecond
+                    && !isSimpllFieldAccessAbstraction(InlinedFunSecond))
+                    inlineSecond = nullptr;
+            }
+
             // Here it is good to make some changes to the variables.
             // If we have two functions to inline and one of them is a field
             // access abstraction, postponing the inlining of the abstraction
