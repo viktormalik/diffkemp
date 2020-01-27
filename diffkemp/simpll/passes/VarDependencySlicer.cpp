@@ -16,8 +16,12 @@
 #include "DebugInfo.h"
 #include <Config.h>
 #include <llvm/Analysis/CFG.h>
+#include <llvm/Analysis/MemoryDependenceAnalysis.h>
 #include <llvm/IR/CFG.h>
 #include <llvm/IR/Operator.h>
+#include <llvm/Analysis/BasicAliasAnalysis.h>
+#include <llvm/Analysis/MemorySSA.h>
+#include <llvm/Analysis/TargetLibraryInfo.h>
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
 #include <llvm/Transforms/Utils/Cloning.h>
 #include <llvm/Transforms/Utils/Local.h>
@@ -36,6 +40,14 @@ PreservedAnalyses VarDependencySlicer::run(Function &Fun,
     AffectedBasicBlocks.clear();
     IncludedBasicBlocks.clear();
     IncludedParams.clear();
+
+    // Create MemorySSA object.
+    TargetLibraryInfoImpl TLIi;
+    TargetLibraryInfo TLI(TLIi);
+    AliasAnalysis AA(TLI);
+    AA.addAAResult(fam.getResult<BasicAA>(Fun));
+    DominatorTree DT(Fun);
+    MemorySSA SSA(Fun, &AA, &DT);
 
     DEBUG_WITH_TYPE(DEBUG_SIMPLL,
                     dbgs() << "Function: " << Fun.getName().str() << "\n");
@@ -68,16 +80,25 @@ PreservedAnalyses VarDependencySlicer::run(Function &Fun,
                 DEBUG_WITH_TYPE(DEBUG_SIMPLL, {
                     dbgs() << "Dependent: ";
                     Instr.print(dbgs());
+                    dbgs() << "\n";
                 });
                 if (auto BranchInstr = dyn_cast<BranchInst>(&Instr)) {
                     auto affectedBBs = affectedBasicBlocks(BranchInstr);
                     addAllInstrs(affectedBBs);
                 }
                 if (auto StoreInstr = dyn_cast<StoreInst>(&Instr)) {
+                    // Add all loads corresponding to memory uses of the store
+                    // instruction.
                     auto Ptr = StoreInstr->getPointerOperand();
-                    if (auto PtrInstr = dyn_cast<Instruction>(Ptr)) {
-                        addToDependent(PtrInstr);
-                    }
+                    MemoryAccess *MA = SSA.getMemoryAccess(StoreInstr);
+                    auto Iter = MA->getIterator();
+                    auto Beg = &*Iter;
+                    do {
+                        if (auto MU = dyn_cast<MemoryUse>(&*Iter)) {
+                            addToDependent(MU->getMemoryInst());
+                        }
+                        ++Iter;
+                    } while (&*Iter != Beg);
                 }
             }
         }

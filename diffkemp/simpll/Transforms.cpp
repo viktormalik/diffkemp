@@ -32,6 +32,7 @@
 #include "passes/StructureSizeAnalysis.h"
 #include "passes/UnifyMemcpyPass.h"
 #include "passes/VarDependencySlicer.h"
+#include <llvm/Analysis/BasicAliasAnalysis.h>
 #include <llvm/IR/PassManager.h>
 #include <llvm/Passes/PassBuilder.h>
 #include <llvm/Transforms/IPO/AlwaysInliner.h>
@@ -57,6 +58,7 @@ void preprocessModule(Module &Mod,
         // Slicing of the program w.r.t. the value of a global variable
         PassManager<Function, FunctionAnalysisManager, GlobalVariable *> fpm;
         FunctionAnalysisManager fam(false);
+        fam.registerPass([] { return BasicAA {}; });
         PassBuilder pb;
         pb.registerFunctionAnalyses(fam);
 
