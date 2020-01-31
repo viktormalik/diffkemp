@@ -130,6 +130,7 @@ struct ResultReport {
     std::vector<MissingDefPair> missingDefs;
     std::vector<SyndiffBody> syndiffBodies;
     unsigned analysedLoc;
+    unsigned analysedFuns;
 };
 
 // Report to YAML
@@ -140,6 +141,7 @@ template <> struct MappingTraits<ResultReport> {
         io.mapOptional("missing-defs", result.missingDefs);
         io.mapOptional("syndiff-defs", result.syndiffBodies);
         io.mapOptional("analysed-loc", result.analysedLoc);
+        io.mapOptional("analysed-funs", result.analysedFuns);
     }
 };
 } // namespace llvm::yaml
@@ -270,6 +272,7 @@ void reportOutput(Config &config, ComparisonResult &Result) {
     }
 
     report.analysedLoc = Result.analysedLoc;
+    report.analysedFuns = Result.analysedFuns;
 
     llvm::yaml::Output output(outs());
     output << report;

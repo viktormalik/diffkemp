@@ -46,6 +46,7 @@ struct ComparisonResult {
     std::vector<std::unique_ptr<NonFunctionDifference>> differingObjects;
     std::set<std::string> coveredFuns;
     unsigned analysedLoc;
+    unsigned analysedFuns;
 };
 
 /// Simplify two corresponding modules for the purpose of their subsequent

@@ -213,6 +213,7 @@ void simplifyModulesDiff(Config &config, ComparisonResult &Result) {
     Result.differingObjects = std::move(modComp.DifferingObjects);
     Result.coveredFuns = modComp.CoveredFuns;
     Result.analysedLoc = modComp.analysedLoc;
+    Result.analysedFuns = modComp.analysedFuns;
 }
 
 /// Recursively mark callees of a function with 'alwaysinline' attribute.

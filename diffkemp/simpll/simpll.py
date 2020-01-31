@@ -117,10 +117,12 @@ def simplify_modules_diff(first, second, fun_first, fun_second,
                     if "syndiff-defs" in simpll_result else None
                 analysed_loc = simpll_result["analysed-loc"] \
                     if "analysed-loc" in simpll_result else None
+                analysed_funs = simpll_result["analysed-funs"] \
+                    if "analysed-funs" in simpll_result else None
         except yaml.YAMLError:
             pass
 
         return first_out, second_out, objects_to_compare, missing_defs, \
-            syndiff_defs, analysed_loc
+            syndiff_defs, analysed_loc, analysed_funs
     except CalledProcessError:
         raise SimpLLException("Simplifying files failed")

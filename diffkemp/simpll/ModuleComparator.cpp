@@ -92,6 +92,7 @@ void ModuleComparator::compareFunctions(Function *FirstFun,
     int result = fComp.compare();
 
     analysedLoc += std::max(countLoc(*FirstFun), countLoc(*SecondFun));
+    analysedFuns += 1;
 
     DEBUG_WITH_TYPE(DEBUG_SIMPLL, decreaseDebugIndentLevel());
     if (result == 0) {

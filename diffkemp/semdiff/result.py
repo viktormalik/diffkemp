@@ -47,6 +47,7 @@ class Result:
         self.diff = None
         self.macro_diff = None
         self.analysed_loc = 0
+        self.analysed_funs = 0
         self.inner = dict()
 
     def __str__(self):
@@ -62,6 +63,7 @@ class Result:
         # a higher priority is chosen from the two).
         self.kind = Result.Kind(max(int(self.kind), int(result.kind)))
         self.analysed_loc = self.analysed_loc + result.analysed_loc
+        self.analysed_funs = self.analysed_funs + result.analysed_funs
 
     def report_symbol_stat(self, show_errors=False):
         """
@@ -165,6 +167,7 @@ class Result:
 
     def report_loc(self):
         """Report number of analysed lines of code."""
+        print("Total functions analysed: {}".format(self.analysed_funs))
         print("Total LOC analysed: {}".format(self.analysed_loc))
 
     def report_stat(self, show_errors=False):

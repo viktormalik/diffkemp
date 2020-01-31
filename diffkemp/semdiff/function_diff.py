@@ -156,7 +156,7 @@ def functions_diff(mod_first, mod_second,
             simplify = False
             # Simplify modules
             first_simpl, second_simpl, objects_to_compare, missing_defs, \
-                syndiff_bodies, analysed_loc = \
+                syndiff_bodies, analysed_loc, analysed_funs = \
                 simplify_modules_diff(mod_first.llvm, mod_second.llvm,
                                       fun_first, fun_second,
                                       glob_var.name if glob_var else None,
@@ -192,6 +192,8 @@ def functions_diff(mod_first, mod_second,
 
         if analysed_loc:
             result.analysed_loc = analysed_loc
+        if analysed_funs:
+            result.analysed_funs = analysed_funs
 
         if not objects_to_compare:
             result.kind = Result.Kind.EQUAL_SYNTAX

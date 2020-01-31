@@ -115,6 +115,7 @@ class ModuleComparator {
 
     /// Number of total LOC analysed (sum of LOC of all compared functions).
     unsigned analysedLoc = 0;
+    unsigned analysedFuns = 0;
 
     std::vector<ConstFunPair> MissingDefs;
 
