@@ -15,6 +15,7 @@
 #include "Config.h"
 #include <llvm/IR/Constants.h>
 #include <llvm/Passes/PassBuilder.h>
+#include <passes/FunctionAbstractionsGenerator.h>
 
 using namespace llvm;
 
@@ -356,7 +357,9 @@ void DebugInfo::calculateMacroAlignments() {
                     if (auto Const = dyn_cast<Constant>(&Op)) {
                         if (VisitedConsts.find(Const) == VisitedConsts.end())
                             VisitedConsts.insert(Const);
-                        collectMacrosWithValue(Const);
+                        if (!isSimpllAbstraction(&Fun))
+                            collectMacrosWithValue(
+                                    Const, Fun.getSubprogram()->getUnit());
                     }
                 }
             }
@@ -384,25 +387,24 @@ void DebugInfo::calculateMacroAlignments() {
 
 /// Find all macros and enum values that define a value corresponding to the
 /// value of the given constant and add them to the MacroUsageMap.
-void DebugInfo::collectMacrosWithValue(const Constant *Val) {
+void DebugInfo::collectMacrosWithValue(const Constant *Val,
+                                       const DICompileUnit *CompileUnit) {
     std::string valStr = valueAsString(Val);
     if (valStr.empty())
         return;
 
-    for (auto *CompileUnit : DebugInfoFirst.compile_units()) {
-        for (auto *MacroNode : CompileUnit->getMacros()) {
-            if (auto *Macro = dyn_cast<DIMacro>(MacroNode)) {
-                if (Macro->getValue() == valStr) {
-                    MacroUsageMap[Macro->getName()].insert(Val);
-                }
+    for (auto *MacroNode : CompileUnit->getMacros()) {
+        if (auto *Macro = dyn_cast<DIMacro>(MacroNode)) {
+            if (Macro->getValue() == valStr) {
+                MacroUsageMap[Macro->getName()].insert(Val);
             }
         }
-        for (auto *Enum : CompileUnit->getEnumTypes()) {
-            for (auto *EnumField : Enum->getElements()) {
-                if (auto *Enumerator = dyn_cast<DIEnumerator>(EnumField)) {
-                    if (std::to_string(Enumerator->getValue()) == valStr) {
-                        MacroUsageMap[Enumerator->getName()].insert(Val);
-                    }
+    }
+    for (auto *Enum : CompileUnit->getEnumTypes()) {
+        for (auto *EnumField : Enum->getElements()) {
+            if (auto *Enumerator = dyn_cast<DIEnumerator>(EnumField)) {
+                if (std::to_string(Enumerator->getValue()) == valStr) {
+                    MacroUsageMap[Enumerator->getName()].insert(Val);
                 }
             }
         }

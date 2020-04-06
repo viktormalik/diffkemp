@@ -98,7 +98,8 @@ class DebugInfo {
     void calculateMacroAlignments();
 
     /// Find all macros in the first module having the given value
-    void collectMacrosWithValue(const Constant *Val);
+    void collectMacrosWithValue(const Constant *Val,
+                                const DICompileUnit *CompileUnit);
 
     /// Find all local variables and create a map from their names to their
     /// values.
