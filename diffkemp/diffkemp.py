@@ -36,6 +36,8 @@ def __make_argument_parser():
     generate_ap.add_argument("--sysctl", action="store_true",
                              help="function list is a list of function "
                                   "parameters")
+    generate_ap.add_argument("--precompiled-llvm",
+                             help="use pre-compiled LLVM IR file")
     generate_ap.set_defaults(func=generate)
 
     # "compare" sub-command
@@ -102,7 +104,9 @@ def generate(args):
     """
     # Create a new snapshot from the source directory.
     snapshot = Snapshot.create_from_source(args.kernel_dir, args.output_dir,
-                                           "sysctl" if args.sysctl else None)
+                                           "sysctl" if args.sysctl else None,
+                                           True,
+                                           args.precompiled_llvm)
     source = snapshot.kernel_source
 
     # Build sources for symbols from the list into LLVM IR

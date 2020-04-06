@@ -51,7 +51,7 @@ class Snapshot:
 
     @classmethod
     def create_from_source(cls, kernel_dir, output_dir, fun_kind=None,
-                           setup_dir=True):
+                           setup_dir=True, single_llvm_lib=None):
         """
         Create a snapshot from a kernel source directory and prepare it for
         snapshot directory generation.
@@ -70,7 +70,7 @@ class Snapshot:
             os.mkdir(output_path)
 
         # Prepare source representations for the new snapshot
-        kernel_source = KernelSource(kernel_dir, True)
+        kernel_source = KernelSource(kernel_dir, True, single_llvm_lib)
         snapshot_source = KernelSource(output_path)
 
         kernel_snapshot = cls(kernel_source, snapshot_source, fun_kind)

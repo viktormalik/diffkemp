@@ -26,9 +26,12 @@ class KernelSource:
     modules, and others.
     """
 
-    def __init__(self, kernel_dir, with_builder=False):
+    def __init__(self, kernel_dir, with_builder=False, single_llvm_lib=None):
         self.kernel_dir = os.path.abspath(kernel_dir)
         self.builder = LlvmKernelBuilder(kernel_dir) if with_builder else None
+        self.llvm_lib_module = \
+            LlvmKernelModule(os.path.abspath(single_llvm_lib)) \
+            if single_llvm_lib else None
         self.modules = dict()
         self.cscope_cache = dict()
 
@@ -299,6 +302,9 @@ class KernelSource:
         :param created_before: LLVM module creation time constraint.
         :returns LLVM module containing the specified function.
         """
+        if self.llvm_lib_module:
+            return self.llvm_lib_module
+
         mod = None
 
         srcs = self.find_srcs_with_symbol_def(symbol)
