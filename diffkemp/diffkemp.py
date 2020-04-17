@@ -1,8 +1,9 @@
 from argparse import ArgumentParser, SUPPRESS
 from diffkemp.config import Config
 from diffkemp.snapshot import Snapshot
+from diffkemp.llvm_ir.kernel_llvm_source_builder import KernelLlvmSourceBuilder
+from diffkemp.llvm_ir.source_tree import SourceNotFoundException
 from diffkemp.llvm_ir.kernel_module import KernelParam, LlvmKernelModule
-from diffkemp.llvm_ir.kernel_source import SourceNotFoundException
 from diffkemp.semdiff.caching import SimpLLCache
 from diffkemp.semdiff.function_diff import functions_diff
 from diffkemp.semdiff.result import Result
@@ -33,6 +34,12 @@ def __make_argument_parser():
                              help="output directory of the snapshot")
     generate_ap.add_argument("functions_list",
                              help="list of functions to compare")
+
+    source_kind = generate_ap.add_mutually_exclusive_group(required=True)
+    source_kind.add_argument(
+        "--kernel-with-builder", action="store_true",
+        help="source is the Linux kernel not pre-built into LLVM IR")
+
     generate_ap.add_argument("--sysctl", action="store_true",
                              help="function list is a list of function "
                                   "parameters")
@@ -103,9 +110,17 @@ def generate(args):
       - copy LLVM and C source files into snapshot directory
       - create YAML with list mapping functions to their LLVM sources
     """
+    # Choose the right LlvmSourceFinder and set the corresponding path to
+    # the file/folder that the finder needs.
+    # For now, we only support kernel builder (its path is None).
+    source_finder_cls = KernelLlvmSourceBuilder
+    source_finder_path = None
+
     # Create a new snapshot from the source directory.
-    snapshot = Snapshot.create_from_source(args.kernel_dir, args.output_dir,
-                                           "sysctl" if args.sysctl else None)
+    snapshot = Snapshot.create_from_source(
+        args.kernel_dir, args.output_dir,
+        source_finder_cls, source_finder_path,
+        "sysctl" if args.sysctl else None)
     source = snapshot.kernel_source
 
     # Build sources for symbols from the list into LLVM IR
@@ -161,10 +176,7 @@ def generate(args):
                     data = sysctl_mod.get_data(sysctl)
                     if not data:
                         continue
-                    for data_src in source.find_srcs_using_symbol(data.name):
-                        data_mod = source.get_module_from_source(data_src)
-                        if not data_mod:
-                            continue
+                    for data_mod in source.get_modules_using_symbol(data.name):
                         for data_fun in \
                                 data_mod.get_functions_using_param(data):
                             if data_fun == proc_fun:

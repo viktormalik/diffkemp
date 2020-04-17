@@ -1,7 +1,8 @@
 """Unit tests for working with sysctl modules."""
 
 import pytest
-from diffkemp.llvm_ir.kernel_source import KernelSource
+from diffkemp.llvm_ir.kernel_source_tree import KernelSourceTree
+from diffkemp.llvm_ir.kernel_llvm_source_builder import KernelLlvmSourceBuilder
 from diffkemp.llvm_ir.llvm_sysctl_module import matches, LlvmSysctlModule
 
 
@@ -10,8 +11,9 @@ def mod():
     """
     Build LlvmSysctlModule for net.core.* sysctl options shared among tests.
     """
-    source = KernelSource("kernel/linux-3.10.0-862.el7", True)
-    kernel_module = source.get_module_from_source("net/core/sysctl_net_core.c")
+    source = KernelSourceTree("kernel/linux-3.10.0-957.el7",
+                              KernelLlvmSourceBuilder)
+    kernel_module = source.get_module_for_symbol("net_core_table")
     yield LlvmSysctlModule(kernel_module, "net_core_table")
     source.finalize()
 
@@ -43,8 +45,9 @@ def test_get_data(mod):
 
 def test_get_child():
     """Test getting child of a sysctl definition."""
-    source = KernelSource("kernel/linux-3.10.0-862.el7", True)
-    kernel_module = source.get_module_from_source("kernel/sysctl.c")
+    source = KernelSourceTree("kernel/linux-3.10.0-957.el7",
+                              KernelLlvmSourceBuilder)
+    kernel_module = source.get_module_for_symbol("sysctl_base_table")
     sysctl_module = LlvmSysctlModule(kernel_module, "sysctl_base_table")
     assert sysctl_module.get_child("vm").name == "vm_table"
 

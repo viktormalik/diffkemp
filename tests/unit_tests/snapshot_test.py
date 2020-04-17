@@ -2,7 +2,8 @@
 
 from diffkemp.snapshot import Snapshot
 from diffkemp.llvm_ir.kernel_module import LlvmKernelModule
-from diffkemp.llvm_ir.kernel_source import KernelSource
+from diffkemp.llvm_ir.source_tree import SourceTree
+from diffkemp.llvm_ir.kernel_llvm_source_builder import KernelLlvmSourceBuilder
 from tempfile import NamedTemporaryFile
 from tempfile import TemporaryDirectory
 import datetime
@@ -15,17 +16,19 @@ def test_create_snapshot_from_source():
     kernel_dir = "kernel/linux-3.10.0-957.el7"
     output_dir = "snapshots/linux-3.10.0-957.el7"
     snap = Snapshot.create_from_source(kernel_dir, output_dir,
+                                       KernelLlvmSourceBuilder, None,
                                        None, False)
 
     assert snap.kernel_source is not None
-    assert kernel_dir in snap.kernel_source.kernel_dir
+    assert kernel_dir in snap.kernel_source.source_dir
     assert snap.snapshot_source is not None
-    assert output_dir in snap.snapshot_source.kernel_dir
+    assert output_dir in snap.snapshot_source.source_dir
     assert snap.fun_kind is None
     assert len(snap.fun_groups) == 1
     assert len(snap.fun_groups[None].functions) == 0
 
     snap = Snapshot.create_from_source(kernel_dir, output_dir,
+                                       KernelLlvmSourceBuilder, None,
                                        "sysctl", False)
 
     assert snap.fun_kind == "sysctl"
@@ -57,6 +60,9 @@ def test_load_snapshot_from_dir_functions():
             llvm: mm/page_alloc.ll
             name: __alloc_pages_nodemask
             tag: null
+          llvm_source_finder:
+            kind: kernel_with_builder
+            path: null
           source_kernel_dir: /diffkemp/kernel/linux-3.10.0-957.el7
         """)
 
@@ -66,8 +72,10 @@ def test_load_snapshot_from_dir_functions():
         snap = Snapshot.load_from_dir(snap_dir, config_filename)
 
         assert str(snap.created_time) == "2020-01-01 00:00:00.000001+00:00"
-        assert isinstance(snap.snapshot_source, KernelSource)
-        assert snap.snapshot_source.kernel_dir == snap_dir
+        assert isinstance(snap.snapshot_source, SourceTree)
+        assert isinstance(snap.snapshot_source.source_finder,
+                          KernelLlvmSourceBuilder)
+        assert snap.snapshot_source.source_dir == snap_dir
         assert len(snap.fun_groups) == 1
         assert None in snap.fun_groups
         assert len(snap.fun_groups[None].functions) == 2
@@ -114,6 +122,9 @@ def test_load_snapshot_from_dir_sysctls():
               name: proc_dointvec_minmax
               tag: proc handler
             sysctl: kernel.timer_migration
+          llvm_source_finder:
+            kind: kernel_with_builder
+            path: null
           source_kernel_dir: /diffkemp/kernel/linux-3.10.0-957.el7
         """)
 
@@ -150,6 +161,7 @@ def test_add_sysctl_fun_group():
     kernel_dir = "kernel/linux-3.10.0-957.el7"
     output_dir = "snapshots/linux-3.10.0-957.el7"
     snap = Snapshot.create_from_source(kernel_dir, output_dir,
+                                       KernelLlvmSourceBuilder, None,
                                        "sysctl", False)
 
     snap.add_fun_group("kernel.sched_latency_ns")
@@ -163,6 +175,7 @@ def test_add_fun_none_group():
     kernel_dir = "kernel/linux-3.10.0-957.el7"
     output_dir = "snapshots/linux-3.10.0-957.el7"
     snap = Snapshot.create_from_source(kernel_dir, output_dir,
+                                       KernelLlvmSourceBuilder, None,
                                        None, False)
 
     mod = LlvmKernelModule("net/core/skbuff.ll")
@@ -180,6 +193,7 @@ def test_add_fun_sysctl_group():
     kernel_dir = "kernel/linux-3.10.0-957.el7"
     output_dir = "snapshots/linux-3.10.0-957.el7"
     snap = Snapshot.create_from_source(kernel_dir, output_dir,
+                                       KernelLlvmSourceBuilder, None,
                                        "sysctl", False)
 
     snap.add_fun_group("kernel.sched_latency_ns")
@@ -208,6 +222,7 @@ def test_get_modules():
     kernel_dir = "kernel/linux-3.10.0-957.el7"
     output_dir = "snapshots/linux-3.10.0-957.el7"
     snap = Snapshot.create_from_source(kernel_dir, output_dir,
+                                       KernelLlvmSourceBuilder, None,
                                        "sysctl", False)
 
     snap.add_fun_group("kernel.sched_latency_ns")
@@ -230,6 +245,7 @@ def test_get_by_name_functions():
     kernel_dir = "kernel/linux-3.10.0-957.el7"
     output_dir = "snapshots/linux-3.10.0-957.el7"
     snap = Snapshot.create_from_source(kernel_dir, output_dir,
+                                       KernelLlvmSourceBuilder, None,
                                        None, False)
 
     mod_buff = LlvmKernelModule("net/core/skbuff.ll")
@@ -248,6 +264,7 @@ def test_get_by_name_sysctls():
     kernel_dir = "kernel/linux-3.10.0-957.el7"
     output_dir = "snapshots/linux-3.10.0-957.el7"
     snap = Snapshot.create_from_source(kernel_dir, output_dir,
+                                       KernelLlvmSourceBuilder, None,
                                        "sysctl", False)
 
     snap.add_fun_group("kernel.sched_latency_ns")
@@ -273,6 +290,7 @@ def test_filter():
     kernel_dir = "kernel/linux-3.10.0-957.el7"
     output_dir = "snapshots/linux-3.10.0-957.el7"
     snap = Snapshot.create_from_source(kernel_dir, output_dir,
+                                       KernelLlvmSourceBuilder, None,
                                        None, False)
 
     snap.add_fun("___pskb_trim", LlvmKernelModule("net/core/skbuff.ll"))
@@ -297,6 +315,7 @@ def test_to_yaml_functions():
     kernel_dir = "kernel/linux-3.10.0-957.el7"
     output_dir = "snapshots/linux-3.10.0-957.el7"
     snap = Snapshot.create_from_source(kernel_dir, output_dir,
+                                       KernelLlvmSourceBuilder, None,
                                        None, False)
 
     snap.add_fun("___pskb_trim", LlvmKernelModule(
@@ -309,8 +328,9 @@ def test_to_yaml_functions():
 
     assert len(yaml_snap) == 1
     yaml_dict = yaml_snap[0]
-    assert len(yaml_dict) == 5
+    assert len(yaml_dict) == 6
     assert isinstance(yaml_dict["created_time"], datetime.datetime)
+    assert yaml_dict["llvm_source_finder"]["kind"] == "kernel_with_builder"
     assert len(yaml_dict["list"]) == 2
     assert set([f["name"] for f in yaml_dict["list"]]) ==\
         {"___pskb_trim",
@@ -335,6 +355,7 @@ def test_to_yaml_sysctls():
     kernel_dir = "kernel/linux-3.10.0-957.el7"
     output_dir = "snapshots-sysctl/linux-3.10.0-957.el7"
     snap = Snapshot.create_from_source(kernel_dir, output_dir,
+                                       KernelLlvmSourceBuilder, None,
                                        "sysctl", False)
 
     snap.add_fun_group("kernel.sched_latency_ns")
@@ -353,7 +374,8 @@ def test_to_yaml_sysctls():
     yaml_snap = yaml.safe_load(yaml_str)
     assert len(yaml_snap) == 1
     yaml_dict = yaml_snap[0]
-    assert len(yaml_dict) == 5
+    assert len(yaml_dict) == 6
+    assert yaml_dict["llvm_source_finder"]["kind"] == "kernel_with_builder"
     assert isinstance(yaml_dict["created_time"], datetime.datetime)
     assert len(yaml_dict["list"]) == 2
     assert set([g["sysctl"] for g in yaml_dict["list"]]) == {

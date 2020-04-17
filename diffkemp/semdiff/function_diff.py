@@ -1,5 +1,5 @@
 """Semantic difference of two functions using llreve and Z3 SMT solver."""
-from diffkemp.llvm_ir.kernel_source import SourceNotFoundException
+from diffkemp.llvm_ir.source_tree import SourceNotFoundException
 from diffkemp.simpll.simpll import run_simpll, SimpLLException
 from diffkemp.semdiff.result import Result
 from diffkemp.syndiff.function_syntax_diff import syntax_diff

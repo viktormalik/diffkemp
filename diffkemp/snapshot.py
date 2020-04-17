@@ -4,7 +4,9 @@ Contains mappings of original kernel source, snapshot kernel source and
 holds the function list.
 """
 from diffkemp.llvm_ir.kernel_module import LlvmKernelModule
-from diffkemp.llvm_ir.kernel_source import KernelSource
+from diffkemp.llvm_ir.kernel_source_tree import KernelSourceTree
+from diffkemp.llvm_ir.source_tree import SourceTree
+from diffkemp.llvm_ir.kernel_llvm_source_builder import KernelLlvmSourceBuilder
 import datetime
 import os
 import pkg_resources
@@ -50,13 +52,17 @@ class Snapshot:
         self.created_time = None
 
     @classmethod
-    def create_from_source(cls, kernel_dir, output_dir, fun_kind=None,
-                           setup_dir=True):
+    def create_from_source(cls, kernel_dir, output_dir,
+                           source_finder_cls, source_finder_path,
+                           fun_kind=None, setup_dir=True):
         """
         Create a snapshot from a kernel source directory and prepare it for
         snapshot directory generation.
         :param kernel_dir: Source kernel directory.
         :param output_dir: Snapshot output directory.
+        :param source_finder_cls: Class of the source finder to be used.
+        :param source_finder_path: Path to the files required by the source
+                                   finder.
         :param fun_kind: Snapshot function kind.
         :param setup_dir: Whether to recreate the output directory.
         :return: Desired instance of Snapshot.
@@ -69,9 +75,15 @@ class Snapshot:
                 shutil.rmtree(output_path)
             os.mkdir(output_path)
 
+        if fun_kind == "sysctl":
+            source_tree_cls = KernelSourceTree
+        else:
+            source_tree_cls = SourceTree
+
         # Prepare source representations for the new snapshot
-        kernel_source = KernelSource(kernel_dir, True)
-        snapshot_source = KernelSource(output_path)
+        kernel_source = source_tree_cls(kernel_dir, source_finder_cls,
+                                        source_finder_path)
+        snapshot_source = source_tree_cls(output_path)
 
         kernel_snapshot = cls(kernel_source, snapshot_source, fun_kind)
 
@@ -89,7 +101,7 @@ class Snapshot:
         :param config_file: Name of the snapshot configuration file.
         :return: Desired instance of Snapshot.
         """
-        snapshot_source = KernelSource(snapshot_dir)
+        snapshot_source = SourceTree(snapshot_dir)
         loaded_snapshot = cls(None, snapshot_source)
 
         with open(os.path.join(snapshot_dir, config_file), "r") as \
@@ -107,13 +119,12 @@ class Snapshot:
 
     def generate_snapshot_dir(self):
         """Generate the corresponding snapshot directory."""
-        # Copy LLVM files to the snapshot.
+        # Copy LLVM files and C files to the snapshot.
         self.kernel_source.copy_source_files(self.modules(),
-                                             self.snapshot_source.kernel_dir)
-        self.snapshot_source.build_cscope_database()
+                                             self.snapshot_source)
 
         # Create the YAML snapshot representation inside the output directory.
-        with open(os.path.join(self.snapshot_source.kernel_dir,
+        with open(os.path.join(self.snapshot_source.source_dir,
                                "snapshot.yaml"), "w") as snapshot_yaml:
             snapshot_yaml.write(self.to_yaml())
 
@@ -122,6 +133,8 @@ class Snapshot:
         Add function to the function list.
         :param name: Name of the function.
         :param llvm_mod: LLVM module with the function definition.
+        :param glob_var: Global variable whose usage is analysed within the
+                         function.
         :param tag: Function tag.
         :param group: Group to put the function to.
         """
@@ -186,9 +199,17 @@ class Snapshot:
         self.created_time = self.created_time.replace(
             tzinfo=datetime.timezone.utc)
 
+        llvm_finder_cls = None
+        llvm_finder_path = None
+        if yaml_dict["llvm_source_finder"]["kind"] == "kernel_with_builder":
+            llvm_finder_cls = KernelLlvmSourceBuilder
+        if llvm_finder_cls is not None:
+            self.snapshot_source.init_source_finder(llvm_finder_cls,
+                                                    llvm_finder_path)
+
         if os.path.isdir(yaml_dict["source_kernel_dir"]):
-            self.kernel_source = KernelSource(yaml_dict["source_kernel_dir"],
-                                              True)
+            self.kernel_source = SourceTree(yaml_dict["source_kernel_dir"],
+                                            llvm_finder_cls, llvm_finder_path)
 
         if "sysctl" in yaml_dict["list"][0]:
             self.kind = "sysctl"
@@ -208,7 +229,7 @@ class Snapshot:
                 self.add_fun(f["name"],
                              LlvmKernelModule(
                                  os.path.join(os.path.relpath(
-                                     self.snapshot_source.kernel_dir),
+                                     self.snapshot_source.source_dir),
                                      f["llvm"]))
                              if f["llvm"] else None,
                              f["glob_var"],
@@ -227,7 +248,7 @@ class Snapshot:
             "functions": [{
                 "name": fun_name,
                 "llvm": os.path.relpath(fun_desc.mod.llvm,
-                                        self.snapshot_source.kernel_dir)
+                                        self.snapshot_source.source_dir)
                 if fun_desc.mod else None,
                 "glob_var": fun_desc.glob_var,
                 "tag": fun_desc.tag
@@ -243,6 +264,10 @@ class Snapshot:
             "systcl_group_list",
             "list": fun_yaml_dict[0]["functions"] if None in self.fun_groups
             else fun_yaml_dict,
-            "source_kernel_dir": self.kernel_source.kernel_dir
+            "source_kernel_dir": self.kernel_source.source_dir,
+            "llvm_source_finder": {
+                "kind": self.kernel_source.source_finder.str(),
+                "path": self.kernel_source.source_finder.path
+            }
         }]
         return yaml.dump(yaml_dict)
