@@ -4,6 +4,7 @@ from diffkemp.snapshot import Snapshot
 from diffkemp.llvm_ir.kernel_llvm_source_builder import KernelLlvmSourceBuilder
 from diffkemp.llvm_ir.source_tree import SourceNotFoundException
 from diffkemp.llvm_ir.llvm_module import LlvmParam, LlvmModule
+from diffkemp.llvm_ir.single_llvm_finder import SingleLlvmFinder
 from diffkemp.semdiff.caching import SimpLLCache
 from diffkemp.semdiff.function_diff import functions_diff
 from diffkemp.semdiff.result import Result
@@ -39,6 +40,9 @@ def __make_argument_parser():
     source_kind.add_argument(
         "--kernel-with-builder", action="store_true",
         help="source is the Linux kernel not pre-built into LLVM IR")
+    source_kind.add_argument(
+        "--single-llvm-file", metavar="FILE",
+        help="source project is built into a single LLVM IR file")
 
     generate_ap.add_argument("--sysctl", action="store_true",
                              help="function list is a list of function "
@@ -111,16 +115,21 @@ def generate(args):
     """
     # Choose the right LlvmSourceFinder and set the corresponding path to
     # the file/folder that the finder needs.
-    # For now, we only support kernel builder (its path is None).
-    source_finder_cls = KernelLlvmSourceBuilder
-    source_finder_path = None
+    if args.kernel_with_builder:
+        # Linux kernel to LLVM builder
+        source_finder_cls = KernelLlvmSourceBuilder
+        source_finder_path = None
+    elif args.single_llvm_file:
+        # Project pre-built into a single LLVM IR file
+        source_finder_cls = SingleLlvmFinder
+        source_finder_path = args.single_llvm_file
 
     # Create a new snapshot from the source directory.
     snapshot = Snapshot.create_from_source(
         args.source_dir, args.output_dir,
         source_finder_cls, source_finder_path,
         "sysctl" if args.sysctl else None)
-    source = snapshot.kernel_source
+    source = snapshot.source_tree
 
     # Build sources for symbols from the list into LLVM IR
     with open(args.functions_list, "r") as fun_list_file:

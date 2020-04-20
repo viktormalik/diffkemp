@@ -20,7 +20,10 @@ class LlvmSourceFinder(ABC):
     """
     def __init__(self, source_dir, path):
         self.source_dir = os.path.abspath(source_dir)
-        self.path = path
+        if path is not None:
+            self.path = os.path.relpath(path, source_dir)
+        else:
+            self.path = None
 
     @abstractmethod
     def str(self):

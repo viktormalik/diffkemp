@@ -34,6 +34,11 @@ class SourceTree:
     def init_source_finder(self, finder_cls, path):
         self.source_finder = finder_cls(self.source_dir, path)
 
+    def _make_abs_path(self, file):
+        if not os.path.isabs(file):
+            file = os.path.join(self.source_dir, file)
+        return file
+
     def _get_module_from_source(self, source):
         """
         Create instance of LlvmModule from an LLVM IR source file.
@@ -58,6 +63,8 @@ class SourceTree:
             raise SourceNotFoundException(symbol)
 
         source = self.source_finder.find_llvm_with_symbol_def(symbol)
+        if source:
+            source = self._make_abs_path(source)
         if source is None or not os.path.isfile(source):
             raise SourceNotFoundException(symbol)
 
@@ -84,6 +91,7 @@ class SourceTree:
         sources = self.source_finder.find_llvm_with_symbol_use(symbol)
         modules = []
         for src in sources:
+            src = self._make_abs_path(src)
             if os.path.isfile(src):
                 modules.append(self._get_module_from_source(src))
         return modules
