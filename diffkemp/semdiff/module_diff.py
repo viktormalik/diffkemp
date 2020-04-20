@@ -1,5 +1,5 @@
 """
-Comparing two kernel modules in LLVM IR for semantic equivalence w.r.t. some
+Comparing two modules in LLVM IR for semantic equivalence w.r.t. some
 global variable (parameter of modules). Each pair of corresponding functions
 using the given parameter is compared individually.
 """

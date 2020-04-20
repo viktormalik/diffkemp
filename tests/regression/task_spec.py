@@ -110,9 +110,9 @@ class TaskSpec:
     def prepare_dir(self, old_module, new_module, old_src, new_src, name=None):
         """
         Create the task directory and copy the LLVM and the C files there.
-        :param old_module: Old LLVM module (instance of LlvmKernelModule).
+        :param old_module: Old LLVM module (instance of LlvmModule).
         :param old_src: C source from the old kernel version to be copied.
-        :param new_module: New LLVM module (instance of LlvmKernelModule).
+        :param new_module: New LLVM module (instance of LlvmModule).
         :param new_src: C source from the new kernel version to be copied.
         :param name: Optional parameter to specify the new file names. If None
                      then the spec name is used.

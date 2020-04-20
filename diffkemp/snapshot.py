@@ -1,9 +1,10 @@
 """
-Kernel snapshot representation.
-Contains mappings of original kernel source, snapshot kernel source and
-holds the function list.
+Snapshot representation.
+Contains necessary information about the snapshot and (mainly) holds
+the function list containing mapping of the compared functions to LLVM files
+with their definitions.
 """
-from diffkemp.llvm_ir.kernel_module import LlvmKernelModule
+from diffkemp.llvm_ir.llvm_module import LlvmModule
 from diffkemp.llvm_ir.kernel_source_tree import KernelSourceTree
 from diffkemp.llvm_ir.source_tree import SourceTree
 from diffkemp.llvm_ir.kernel_llvm_source_builder import KernelLlvmSourceBuilder
@@ -16,9 +17,9 @@ import yaml
 
 class Snapshot:
     """
-    Kernel snapshot.
-    Provides methods for snapshot management. Also includes descriptions of
-    functions and sysctl options.
+    Project functions snapshot.
+    Provides methods for snapshot management. Also includes specification of
+    analysed functions. Functions can be split into multiple groups.
     """
 
     class FunctionDesc:
@@ -26,7 +27,6 @@ class Snapshot:
         Function description.
         Contains LLVM module of the function definition, a global variable,
         and a tag.
-        For sysctl option, glob_var is the data variable that the option sets.
         """
 
         def __init__(self, mod, glob_var, tag):
@@ -36,29 +36,29 @@ class Snapshot:
 
     class FunctionGroup:
         """
-        Group of functions. Used to group functions belonging to a single
-        sysctl options.
+        Group of functions. Used to group functions using the same global
+        variable (LlvmParam).
         """
 
         def __init__(self):
             self.functions = dict()
 
-    def __init__(self, kernel_source=None, snapshot_source=None,
+    def __init__(self, source_tree=None, snapshot_tree=None,
                  fun_kind=None):
-        self.kernel_source = kernel_source
-        self.snapshot_source = snapshot_source
+        self.source_tree = source_tree
+        self.snapshot_tree = snapshot_tree
         self.fun_kind = fun_kind
         self.fun_groups = dict()
         self.created_time = None
 
     @classmethod
-    def create_from_source(cls, kernel_dir, output_dir,
+    def create_from_source(cls, source_dir, output_dir,
                            source_finder_cls, source_finder_path,
                            fun_kind=None, setup_dir=True):
         """
-        Create a snapshot from a kernel source directory and prepare it for
+        Create a snapshot from a project source directory and prepare it for
         snapshot directory generation.
-        :param kernel_dir: Source kernel directory.
+        :param source_dir: Source directory.
         :param output_dir: Snapshot output directory.
         :param source_finder_cls: Class of the source finder to be used.
         :param source_finder_path: Path to the files required by the source
@@ -81,17 +81,17 @@ class Snapshot:
             source_tree_cls = SourceTree
 
         # Prepare source representations for the new snapshot
-        kernel_source = source_tree_cls(kernel_dir, source_finder_cls,
-                                        source_finder_path)
-        snapshot_source = source_tree_cls(output_path)
+        source_tree = source_tree_cls(source_dir, source_finder_cls,
+                                      source_finder_path)
+        snapshot_tree = source_tree_cls(output_path)
 
-        kernel_snapshot = cls(kernel_source, snapshot_source, fun_kind)
+        snapshot = cls(source_tree, snapshot_tree, fun_kind)
 
         # Add a new None group to the snapshot if the function kind is None.
         if fun_kind is None:
-            kernel_snapshot._add_none_group()
+            snapshot._add_none_group()
 
-        return kernel_snapshot
+        return snapshot
 
     @classmethod
     def load_from_dir(cls, snapshot_dir, config_file="snapshot.yaml"):
@@ -101,8 +101,8 @@ class Snapshot:
         :param config_file: Name of the snapshot configuration file.
         :return: Desired instance of Snapshot.
         """
-        snapshot_source = SourceTree(snapshot_dir)
-        loaded_snapshot = cls(None, snapshot_source)
+        snapshot_tree = SourceTree(snapshot_dir)
+        loaded_snapshot = cls(None, snapshot_tree)
 
         with open(os.path.join(snapshot_dir, config_file), "r") as \
                 snapshot_yaml:
@@ -111,20 +111,20 @@ class Snapshot:
         return loaded_snapshot
 
     def finalize(self):
-        """Finalize both kernel sources."""
-        if self.kernel_source is not None:
-            self.kernel_source.finalize()
-        if self.snapshot_source is not None:
-            self.snapshot_source.finalize()
+        """Run finalize for both source trees."""
+        if self.source_tree is not None:
+            self.source_tree.finalize()
+        if self.snapshot_tree is not None:
+            self.snapshot_tree.finalize()
 
     def generate_snapshot_dir(self):
         """Generate the corresponding snapshot directory."""
         # Copy LLVM files and C files to the snapshot.
-        self.kernel_source.copy_source_files(self.modules(),
-                                             self.snapshot_source)
+        self.source_tree.copy_source_files(self.modules(),
+                                           self.snapshot_tree)
 
         # Create the YAML snapshot representation inside the output directory.
-        with open(os.path.join(self.snapshot_source.source_dir,
+        with open(os.path.join(self.snapshot_tree.source_dir,
                                "snapshot.yaml"), "w") as snapshot_yaml:
             snapshot_yaml.write(self.to_yaml())
 
@@ -178,7 +178,7 @@ class Snapshot:
     def filter(self, functions, group=None):
         """
         Filter only chosen functions in the given group.
-        :param name: List of function names to filter.
+        :param functions: List of function names to filter.
         :param group: Group to filter.
         """
         self.fun_groups[group].functions = {f: self.fun_groups[
@@ -204,12 +204,12 @@ class Snapshot:
         if yaml_dict["llvm_source_finder"]["kind"] == "kernel_with_builder":
             llvm_finder_cls = KernelLlvmSourceBuilder
         if llvm_finder_cls is not None:
-            self.snapshot_source.init_source_finder(llvm_finder_cls,
-                                                    llvm_finder_path)
+            self.snapshot_tree.init_source_finder(llvm_finder_cls,
+                                                  llvm_finder_path)
 
-        if os.path.isdir(yaml_dict["source_kernel_dir"]):
-            self.kernel_source = SourceTree(yaml_dict["source_kernel_dir"],
-                                            llvm_finder_cls, llvm_finder_path)
+        if os.path.isdir(yaml_dict["source_dir"]):
+            self.source_tree = SourceTree(yaml_dict["source_dir"],
+                                          llvm_finder_cls, llvm_finder_path)
 
         if "sysctl" in yaml_dict["list"][0]:
             self.kind = "sysctl"
@@ -227,9 +227,9 @@ class Snapshot:
             self.fun_groups[group] = self.FunctionGroup()
             for f in functions:
                 self.add_fun(f["name"],
-                             LlvmKernelModule(
+                             LlvmModule(
                                  os.path.join(os.path.relpath(
-                                     self.snapshot_source.source_dir),
+                                     self.snapshot_tree.source_dir),
                                      f["llvm"]))
                              if f["llvm"] else None,
                              f["glob_var"],
@@ -248,7 +248,7 @@ class Snapshot:
             "functions": [{
                 "name": fun_name,
                 "llvm": os.path.relpath(fun_desc.mod.llvm,
-                                        self.snapshot_source.source_dir)
+                                        self.snapshot_tree.source_dir)
                 if fun_desc.mod else None,
                 "glob_var": fun_desc.glob_var,
                 "tag": fun_desc.tag
@@ -264,10 +264,10 @@ class Snapshot:
             "systcl_group_list",
             "list": fun_yaml_dict[0]["functions"] if None in self.fun_groups
             else fun_yaml_dict,
-            "source_kernel_dir": self.kernel_source.source_dir,
+            "source_dir": self.source_tree.source_dir,
             "llvm_source_finder": {
-                "kind": self.kernel_source.source_finder.str(),
-                "path": self.kernel_source.source_finder.path
+                "kind": self.source_tree.source_finder.str(),
+                "path": self.source_tree.source_finder.path
             }
         }]
         return yaml.dump(yaml_dict)

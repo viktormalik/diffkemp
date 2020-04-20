@@ -1,7 +1,7 @@
 """
 Building kernel sources into LLVM IR.
 """
-from diffkemp.llvm_ir.kernel_module import LlvmKernelModule
+from diffkemp.llvm_ir.llvm_module import LlvmModule
 from diffkemp.llvm_ir.llvm_source_finder import LlvmSourceFinder, \
     SourceNotFoundException
 import os
@@ -66,7 +66,7 @@ class KernelLlvmSourceBuilder(LlvmSourceFinder):
                 source_path = os.path.join(self.source_dir, src)
                 llvm_filename = self._build_source_to_llvm(source_path)
                 if os.path.isfile(llvm_filename):
-                    mod = LlvmKernelModule(llvm_filename)
+                    mod = LlvmModule(llvm_filename)
                     if mod.has_function(symbol) or mod.has_global(symbol):
                         break
             except BuildException:

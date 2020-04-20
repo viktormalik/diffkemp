@@ -1,7 +1,7 @@
 """Unit tests for the Snapshot class."""
 
 from diffkemp.snapshot import Snapshot
-from diffkemp.llvm_ir.kernel_module import LlvmKernelModule
+from diffkemp.llvm_ir.llvm_module import LlvmModule
 from diffkemp.llvm_ir.source_tree import SourceTree
 from diffkemp.llvm_ir.kernel_llvm_source_builder import KernelLlvmSourceBuilder
 from tempfile import NamedTemporaryFile
@@ -19,10 +19,10 @@ def test_create_snapshot_from_source():
                                        KernelLlvmSourceBuilder, None,
                                        None, False)
 
-    assert snap.kernel_source is not None
-    assert kernel_dir in snap.kernel_source.source_dir
-    assert snap.snapshot_source is not None
-    assert output_dir in snap.snapshot_source.source_dir
+    assert snap.source_tree is not None
+    assert kernel_dir in snap.source_tree.source_dir
+    assert snap.snapshot_tree is not None
+    assert output_dir in snap.snapshot_tree.source_dir
     assert snap.fun_kind is None
     assert len(snap.fun_groups) == 1
     assert len(snap.fun_groups[None].functions) == 0
@@ -63,7 +63,7 @@ def test_load_snapshot_from_dir_functions():
           llvm_source_finder:
             kind: kernel_with_builder
             path: null
-          source_kernel_dir: /diffkemp/kernel/linux-3.10.0-957.el7
+          source_dir: /diffkemp/kernel/linux-3.10.0-957.el7
         """)
 
         # Load the temporary snapshot configuration file.
@@ -72,10 +72,10 @@ def test_load_snapshot_from_dir_functions():
         snap = Snapshot.load_from_dir(snap_dir, config_filename)
 
         assert str(snap.created_time) == "2020-01-01 00:00:00.000001+00:00"
-        assert isinstance(snap.snapshot_source, SourceTree)
-        assert isinstance(snap.snapshot_source.source_finder,
+        assert isinstance(snap.snapshot_tree, SourceTree)
+        assert isinstance(snap.snapshot_tree.source_finder,
                           KernelLlvmSourceBuilder)
-        assert snap.snapshot_source.source_dir == snap_dir
+        assert snap.snapshot_tree.source_dir == snap_dir
         assert len(snap.fun_groups) == 1
         assert None in snap.fun_groups
         assert len(snap.fun_groups[None].functions) == 2
@@ -125,7 +125,7 @@ def test_load_snapshot_from_dir_sysctls():
           llvm_source_finder:
             kind: kernel_with_builder
             path: null
-          source_kernel_dir: /diffkemp/kernel/linux-3.10.0-957.el7
+          source_dir: /diffkemp/kernel/linux-3.10.0-957.el7
         """)
 
         # Load the temporary sysctl snapshot configuration file.
@@ -178,7 +178,7 @@ def test_add_fun_none_group():
                                        KernelLlvmSourceBuilder, None,
                                        None, False)
 
-    mod = LlvmKernelModule("net/core/skbuff.ll")
+    mod = LlvmModule("net/core/skbuff.ll")
     snap.add_fun("___pskb_trim", mod)
 
     assert "___pskb_trim" in snap.fun_groups[None].functions
@@ -197,7 +197,7 @@ def test_add_fun_sysctl_group():
                                        "sysctl", False)
 
     snap.add_fun_group("kernel.sched_latency_ns")
-    mod = LlvmKernelModule("kernel/sched/debug.ll")
+    mod = LlvmModule("kernel/sched/debug.ll")
     snap.add_fun("sched_debug_header",
                  mod,
                  "sysctl_sched_latency",
@@ -228,9 +228,9 @@ def test_get_modules():
     snap.add_fun_group("kernel.sched_latency_ns")
     snap.add_fun_group("kernel.timer_migration")
     snap.add_fun("sched_proc_update_handler",
-                 LlvmKernelModule("kernel/sched/fair.ll"), None,
+                 LlvmModule("kernel/sched/fair.ll"), None,
                  "proc_handler", "kernel.sched_latency_ns")
-    snap.add_fun("proc_dointvec_minmax", LlvmKernelModule("kernel/sysctl.ll"),
+    snap.add_fun("proc_dointvec_minmax", LlvmModule("kernel/sysctl.ll"),
                  None,
                  "proc_handler", "kernel.timer_migration")
 
@@ -248,8 +248,8 @@ def test_get_by_name_functions():
                                        KernelLlvmSourceBuilder, None,
                                        None, False)
 
-    mod_buff = LlvmKernelModule("net/core/skbuff.ll")
-    mod_alloc = LlvmKernelModule("mm/page_alloc.ll")
+    mod_buff = LlvmModule("net/core/skbuff.ll")
+    mod_alloc = LlvmModule("mm/page_alloc.ll")
     snap.add_fun("___pskb_trim", mod_buff)
     snap.add_fun("__alloc_pages_nodemask", mod_alloc)
 
@@ -269,9 +269,9 @@ def test_get_by_name_sysctls():
 
     snap.add_fun_group("kernel.sched_latency_ns")
     snap.add_fun_group("kernel.timer_migration")
-    mod_fair = LlvmKernelModule(
+    mod_fair = LlvmModule(
         "snapshots-sysctl/linux-3.10.0-957.el7/kernel/sched/fair.ll")
-    mod_sysctl = LlvmKernelModule(
+    mod_sysctl = LlvmModule(
         "snapshots-sysctl/linux-3.10.0-957.el7/kernel/sysctl.ll")
     snap.add_fun("sched_proc_update_handler", mod_fair, None, "proc handler",
                  "kernel.sched_latency_ns")
@@ -293,9 +293,9 @@ def test_filter():
                                        KernelLlvmSourceBuilder, None,
                                        None, False)
 
-    snap.add_fun("___pskb_trim", LlvmKernelModule("net/core/skbuff.ll"))
+    snap.add_fun("___pskb_trim", LlvmModule("net/core/skbuff.ll"))
     snap.add_fun("__alloc_pages_nodemask",
-                 LlvmKernelModule("mm/page_alloc.ll"))
+                 LlvmModule("mm/page_alloc.ll"))
 
     snap.filter(["__alloc_pages_nodemask"])
     assert len(snap.fun_groups[None].functions) == 1
@@ -318,9 +318,9 @@ def test_to_yaml_functions():
                                        KernelLlvmSourceBuilder, None,
                                        None, False)
 
-    snap.add_fun("___pskb_trim", LlvmKernelModule(
+    snap.add_fun("___pskb_trim", LlvmModule(
         "snapshots/linux-3.10.0-957.el7/net/core/skbuff.ll"))
-    snap.add_fun("__alloc_pages_nodemask", LlvmKernelModule(
+    snap.add_fun("__alloc_pages_nodemask", LlvmModule(
         "snapshots/linux-3.10.0-957.el7/mm/page_alloc.ll"))
 
     yaml_str = snap.to_yaml()
@@ -361,12 +361,12 @@ def test_to_yaml_sysctls():
     snap.add_fun_group("kernel.sched_latency_ns")
     snap.add_fun_group("kernel.timer_migration")
     snap.add_fun("sched_proc_update_handler",
-                 LlvmKernelModule(
+                 LlvmModule(
                      "snapshots-sysctl/linux-3.10.0-957.el7/"
                      "kernel/sched/fair.ll"),
                  None, "proc handler", "kernel.sched_latency_ns")
     snap.add_fun("proc_dointvec_minmax",
-                 LlvmKernelModule(
+                 LlvmModule(
                      "snapshots-sysctl/linux-3.10.0-957.el7/kernel/sysctl.ll"),
                  None, "proc handler", "kernel.timer_migration")
 

@@ -2,7 +2,7 @@
 Class representing source tree of the analysed project.
 Contains functions for getting LLVM modules from the project.
 """
-from diffkemp.llvm_ir.kernel_module import LlvmKernelModule
+from diffkemp.llvm_ir.llvm_module import LlvmModule
 from diffkemp.llvm_ir.llvm_source_finder import SourceNotFoundException
 import errno
 import os
@@ -36,13 +36,13 @@ class SourceTree:
 
     def _get_module_from_source(self, source):
         """
-        Create instance of KernelModule from an LLVM IR source file.
+        Create instance of LlvmModule from an LLVM IR source file.
         Caches created modules to reuse them for the same sources.
         """
         if source in self.modules:
             return self.modules[source]
 
-        module = LlvmKernelModule(source)
+        module = LlvmModule(source)
         self.modules[source] = module
         return module
 
@@ -52,7 +52,7 @@ class SourceTree:
         :param symbol: Symbol (function or global) to search for.
         :param created_before: If specified, the LLVM module is returned only
                                if the LLVM file was modified before this time.
-        :return: Instance of LlvmKernelModule.
+        :return: Instance of LlvmModule.
         """
         if self.source_finder is None:
             raise SourceNotFoundException(symbol)
@@ -76,7 +76,7 @@ class SourceTree:
         """
         Get all LLVM modules that contain functions using the given symbol.
         :param symbol: Symbol (function or global) to search for.
-        :return: List of instances of LlvmKernelModule.
+        :return: List of instances of LlvmModule.
         """
         if self.source_finder is None:
             raise SourceNotFoundException(symbol)
@@ -106,8 +106,8 @@ class SourceTree:
 
     def copy_source_files(self, modules, target_source_tree):
         """
-        Copy C and LLVM source files of given modules from this kernel into
-        a different source tree.
+        Copy C and LLVM source files of given modules from this source tree
+        into a different source tree.
         Preserves the directory structure.
         Also copies all headers included by the modules.
         :param modules: List of modules to copy.

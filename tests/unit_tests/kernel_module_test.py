@@ -1,9 +1,9 @@
 """
 Unit tests for a kernel module in LLVM IR.
-Testing LlvmKernelModule class located in llvm_ir/kernel_module.py.
+Testing LlvmKernelModule class located in llvm_ir/llvm_module.py.
 """
 
-from diffkemp.llvm_ir.kernel_module import KernelParam, LlvmKernelModule
+from diffkemp.llvm_ir.llvm_module import LlvmParam, LlvmModule
 from diffkemp.llvm_ir.kernel_llvm_source_builder import KernelLlvmSourceBuilder
 from diffkemp.llvm_ir.source_tree import SourceTree
 import os
@@ -100,7 +100,7 @@ def test_get_included_headers(source):
     """Test finding the list of included source and header files."""
     llvm_file = source.source_finder._build_source_to_llvm(
         "arch/cris/arch-v10/lib/memset.c")
-    mod = LlvmKernelModule(os.path.join(source.source_dir, llvm_file))
+    mod = LlvmModule(os.path.join(source.source_dir, llvm_file))
     sources = mod.get_included_sources()
     assert sources == set([os.path.join(source.source_dir, f) for f in [
         "arch/cris/arch-v10/lib/memset.c",
@@ -111,7 +111,7 @@ def test_get_included_headers(source):
 
 def test_get_functions_using_param(mod):
     """Test finding functions using a parameter (global variable)."""
-    param = KernelParam("major")
+    param = LlvmParam("major")
     funs = mod.get_functions_using_param(param)
     assert funs == {"snd_register_device", "alsa_sound_init",
                     "alsa_sound_exit"}
@@ -120,7 +120,7 @@ def test_get_functions_using_param(mod):
 def test_get_functions_using_param_with_index(source):
     """Test finding functions using a component of a parameter."""
     mod = source.get_module_for_symbol("net_core_table")
-    param = KernelParam("netdev_rss_key", [0, 0])
+    param = LlvmParam("netdev_rss_key", [0, 0])
     funs = mod.get_functions_using_param(param)
     assert funs == {"proc_do_rss_key"}
 
