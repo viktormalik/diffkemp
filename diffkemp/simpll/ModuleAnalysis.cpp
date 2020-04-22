@@ -146,7 +146,6 @@ void simplifyModulesDiff(Config &config, OverallResult &Result) {
                 Module *>
             mpm;
     mpm.addPass(RemoveUnusedReturnValuesPass{});
-    mpm.addPass(FieldAccessFunctionGenerator{});
     mpm.run(*config.First, mam, config.FirstFun, config.Second.get());
     mpm.run(*config.Second, mam, config.SecondFun, config.First.get());
 
