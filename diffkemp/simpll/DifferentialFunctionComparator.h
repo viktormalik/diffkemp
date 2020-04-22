@@ -84,8 +84,9 @@ class DifferentialFunctionComparator : public FunctionComparator {
     /// GlobalNumberState object, since that approach does not fit the use case
     /// of comparing functions in two different modules.
     int cmpGlobalValues(GlobalValue *L, GlobalValue *R) const override;
-    /// Specific comparing of structure field access.
-    int cmpFieldAccess(const Function *L, const Function *R) const;
+    /// Specific comparing of sequences of field accesses.
+    int cmpFieldAccess(BasicBlock::const_iterator &InstL,
+                       BasicBlock::const_iterator &InstR) const;
     /// Specific comparing of values. Handles values generated from macros
     /// whose value changed and values where at least one of them is a cast.
     int cmpValues(const Value *L, const Value *R) const override;

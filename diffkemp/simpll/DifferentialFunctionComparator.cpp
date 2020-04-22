@@ -688,6 +688,14 @@ int DifferentialFunctionComparator::cmpBasicBlocks(
             CurrentLocR = &InstR->getDebugLoc();
 
         if (int Res = cmpOperationsWithOperands(&*InstL, &*InstR)) {
+            // Try to find longer chains of memory accesses that result into
+            // accessing the same (corresponding) memory.
+            if (isa<GetElementPtrInst>(&*InstL)
+                && isa<GetElementPtrInst>(&*InstR)) {
+                if (cmpFieldAccess(InstL, InstR) == 0)
+                    continue;
+            }
+
             // Some operations not affecting semantics and control flow may be
             // ignored (currently allocas and casts). This may help to handle
             // some small changes that do not affect semantics (it is also
@@ -853,14 +861,8 @@ int DifferentialFunctionComparator::cmpGlobalValues(GlobalValue *L,
                         ModComparator->compareFunctions(FunL, FunR);
                 }
 
-                if (FunL->getName().startswith(SimpllFieldAccessFunName)
-                    && FunR->getName().startswith(SimpllFieldAccessFunName)) {
-                    // Compare field access abstractions using a special
-                    // method.
-                    return cmpFieldAccess(FunL, FunR);
-                } else if (FunL->getName().startswith(SimpllInlineAsmPrefix)
-                           && FunR->getName().startswith(
-                                   SimpllInlineAsmPrefix)) {
+                if (FunL->getName().startswith(SimpllInlineAsmPrefix)
+                    && FunR->getName().startswith(SimpllInlineAsmPrefix)) {
                     // Compare inline assembly code abstractions using metadata
                     // generated in FunctionAbstractionGenerator.
                     StringRef asmL = getInlineAsmString(FunL);
@@ -904,39 +906,89 @@ bool DifferentialFunctionComparator::accumulateAllOffsets(
     return true;
 }
 
-/// Specific comparing of structure field access.
-int DifferentialFunctionComparator::cmpFieldAccess(const Function *L,
-                                                   const Function *R) const {
-    // First compute the complete offset of all GEPs in both functions.
+/// Check if the given instruction is a memory access (i.e. a GEP or a pointer
+/// bitcast) to the given pointer. If so, return true and set the size of the
+/// offset that the instruction adds to the pointer, otherwise return false.
+bool isMemoryAccessToPtr(const Instruction *Inst,
+                         const Value *Ptr,
+                         int &Offset) {
+    if (isa<GetElementPtrInst>(Inst)
+        || ((isa<CastInst>(Inst) && !isa<PtrToIntInst>(Inst)))) {
+        if (Ptr != Inst->getOperand(0))
+            return false;
+        if (auto *GEP = dyn_cast<GetElementPtrInst>(Inst)) {
+            APInt InstOffset(64, 0);
+            if (!GEP->accumulateConstantOffset(
+                        Inst->getParent()->getModule()->getDataLayout(),
+                        InstOffset)) {
+                return false;
+            }
+            Offset = InstOffset.getZExtValue();
+        }
+        return true;
+    }
+    return false;
+}
+
+/// Specific comparing of sequences of field accesses.
+int DifferentialFunctionComparator::cmpFieldAccess(
+        BasicBlock::const_iterator &InstL,
+        BasicBlock::const_iterator &InstR) const {
+    // Compare the complete offset of an unbroken sequence of GEP and bitcast
+    // in each module, starting from InstL and InstR, respectively.
     // It is possible that although the process contains unpacking several
     // anonymous unions and structs, the offset stays the same, which means that
     // without a doubt this is semantically equal (and probably would, in fact,
     // be also equal in machine code).
-    uint64_t OffsetL = 0, OffsetR = 0;
 
-    // If both field access abstractions contain just a single GEP, these can be
-    // compared normally using the cmpGEPs method.
-    if (L->front().size() == 1 && R->front().size() == 1
-        && isa<GetElementPtrInst>(L->front().front())
-        && isa<GetElementPtrInst>(R->front().front())) {
-        return cmpGEPs(dyn_cast<GEPOperator>(&L->front().front()),
-                       dyn_cast<GEPOperator>(&R->front().front()));
-    }
+    // Backup the instruction iterators - if the comparison is not successful,
+    // we'll have to restore them.
+    auto FirstInstL = InstL;
+    auto FirstInstR = InstR;
 
-    if (!accumulateAllOffsets(L->front(), OffsetL)
-        || !accumulateAllOffsets(R->front(), OffsetR))
+    auto GEPL = dyn_cast<GetElementPtrInst>(InstL);
+    auto GEPR = dyn_cast<GetElementPtrInst>(InstR);
+
+    if (!(GEPL && GEPR))
         return 1;
 
-    if (OffsetL == OffsetR)
-        // If the complete offsets are the same, the field accesses are
-        // semantically also the same (the source and target type are compared
-        // in cmpOperations and cmpBasicBlocks as the instruction type and
-        // operand type).
-        return 0;
+    const Value *PtrL = GEPL->getOperand(0);
+    const Value *PtrR = GEPR->getOperand(0);
 
-    // If all of the specific comparisons failed, report non-equal, which will
-    // lead to inling of the abstractions and comparing the instuction the
-    // usual way.
+    if (int CmpPtrs = cmpValues(PtrL, PtrR))
+        return CmpPtrs;
+
+    uint64_t OffsetL = 0, OffsetR = 0;
+    bool l_end = false, r_end = false;
+    while (!l_end && !r_end) {
+        int offset = 0;
+        if (isMemoryAccessToPtr(&*InstL, PtrL, offset)) {
+            OffsetL += offset;
+            PtrL = &*InstL;
+            InstL++;
+        } else {
+            l_end = true;
+        }
+
+        if (isMemoryAccessToPtr(&*InstR, PtrR, offset)) {
+            OffsetR += offset;
+            PtrR = &*InstR;
+            InstR++;
+        } else {
+            r_end = true;
+        }
+    }
+
+    if (OffsetL == OffsetR) {
+        // Makes sure that the resulting pointers coming out of the sequences
+        // are synchronized (have the same serial number).
+        cmpValues(PtrL, PtrR);
+        return 0;
+    }
+
+    // Restore instruction iterators to their original values
+    InstL = FirstInstL;
+    InstR = FirstInstR;
     return 1;
 }
 
