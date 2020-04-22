@@ -73,6 +73,9 @@ bool isAllocFunction(const Function &Fun);
 /// expression)
 bool isCast(const Value *Val);
 
+/// Returns true if the given instruction is a GEP with all indices equal to 0
+bool isZeroGEP(const Value *Val);
+
 /// Run simplification passes on the function
 ///  - simplify CFG
 ///  - dead code elimination

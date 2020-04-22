@@ -507,9 +507,9 @@ int DifferentialFunctionComparator::cmpAllocs(const CallInst *CL,
 /// for control flow only diffs.
 bool DifferentialFunctionComparator::mayIgnore(const User *Inst) const {
     if (config.ControlFlowOnly)
-        return isa<AllocaInst>(Inst) || isCast(Inst);
+        return isa<AllocaInst>(Inst) || isCast(Inst) || isZeroGEP(Inst);
     else {
-        if (isa<AllocaInst>(Inst))
+        if (isa<AllocaInst>(Inst) || isZeroGEP(Inst))
             return true;
         if (isCast(Inst)) {
             auto SrcTy = Inst->getOperand(0)->getType();
@@ -947,12 +947,12 @@ int DifferentialFunctionComparator::cmpFieldAccess(const Function *L,
 /// of the cast.
 int DifferentialFunctionComparator::cmpValues(const Value *L,
                                               const Value *R) const {
-    // Detect casts and use the original value instead when comparing the
-    // control flow only.
+    // Detect casts and GEPs with all indices equal to 0 and use the original
+    // value instead.
     const User *UL = dyn_cast<User>(L);
     const User *UR = dyn_cast<User>(R);
-    const User *CL = (UL && isCast(UL)) ? UL : nullptr;
-    const User *CR = (UR && isCast(UR)) ? UR : nullptr;
+    const User *CL = (UL && (isCast(UL) || isZeroGEP(UL))) ? UL : nullptr;
+    const User *CR = (UR && (isCast(UR) || isZeroGEP(UR))) ? UR : nullptr;
 
     if (CL && CR && mayIgnore(CL) && mayIgnore(CR)) {
         // Both instruction are casts - compare the original values before
