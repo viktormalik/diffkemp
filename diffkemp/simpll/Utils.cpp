@@ -198,6 +198,22 @@ bool isCast(const Value *Val) {
     return false;
 }
 
+/// Returns true if the given value is a GEP instruction with all indices equal
+/// to zero.
+bool isZeroGEP(const Value *Val) {
+    if (isa<GetElementPtrInst>(Val)) {
+        auto Inst = dyn_cast<User>(Val);
+        for (unsigned i = 1; i < Inst->getNumOperands(); ++i) {
+            auto Int = dyn_cast<ConstantInt>(Inst->getOperand(i));
+            if (!(Int && Int->getZExtValue() == 0)) {
+                return false;
+            }
+        }
+        return true;
+    }
+    return false;
+}
+
 /// Get value of the given constant as a string
 std::string valueAsString(const Constant *Val) {
     if (auto *IntVal = dyn_cast<ConstantInt>(Val)) {
