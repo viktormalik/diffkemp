@@ -113,6 +113,12 @@ class DifferentialFunctionComparator : public FunctionComparator {
 
     ModuleComparator *ModComparator;
 
+    /// Try to find a syntax difference that could be causing the semantic
+    /// difference that was found. Looks for differences that cannot be detected
+    /// by simply diffing the compared functions - differences in macros, inline
+    /// assembly code, or in types.
+    void findDifference(const Instruction *L, const Instruction *R) const;
+
     /// Looks for inline assembly differences between the certain values.
     /// Note: passing the parent function is necessary in order to properly
     /// generate the SyntaxDifference object.
@@ -131,6 +137,10 @@ class DifferentialFunctionComparator : public FunctionComparator {
                             StructType *R,
                             const Function *FL,
                             const Function *FR) const;
+
+    /// Find type differences between calls to field access abstractions.
+    void findTypeDifferenceInFieldAccess(const CallInst *CL,
+                                         const CallInst *CR) const;
 
     /// Detects a change from a function to a macro between two instructions.
     /// This is necessary because such a change isn't visible in C source.

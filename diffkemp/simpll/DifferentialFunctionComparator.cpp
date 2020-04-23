@@ -151,11 +151,13 @@ int DifferentialFunctionComparator::cmpAttrs(const AttributeList L,
 
 /// Does additional operations in cases when a difference between two CallInsts
 /// or their arguments is detected.
-/// This consists of three parts:
+/// This consists of four parts:
 /// 1. Compare the called functions using cmpGlobalValues (covers case when they
 /// are not compared in cmpBasicBlocks because there is another difference).
 /// 2. Try to inline the functions.
-/// 3. Look a macro-function differenfce.
+/// 3. Find type differences if the called functions are field access
+///    abstractions.
+/// 4. Look a macro-function difference.
 void DifferentialFunctionComparator::processCallInstDifference(
         const CallInst *CL, const CallInst *CR) const {
     // Use const_cast to get a non-const point to the function (this is
@@ -182,6 +184,12 @@ void DifferentialFunctionComparator::processCallInstDifference(
     if (!isSimpllAbstractionDeclaration(CalledL)
         && !isSimpllAbstractionDeclaration(CalledR))
         ModComparator->tryInline = {CL, CR};
+    // If the call instructions are both field access abstractions, try to find
+    // a type difference between them.
+    if (isSimpllFieldAccessAbstraction(CalledL)
+        && isSimpllFieldAccessAbstraction(CalledR))
+        findTypeDifferences(
+                CalledL, CalledR, CL->getFunction(), CR->getFunction());
 
     // Look for a macro-function difference.
     findMacroFunctionDifference(CL, CR);
@@ -204,48 +212,6 @@ int DifferentialFunctionComparator::cmpOperations(
             const Function *CalledL = getCalledFunction(CL->getCalledValue());
             const Function *CalledR = getCalledFunction(CR->getCalledValue());
             if (CalledL && CalledR) {
-                if (isSimpllFieldAccessAbstraction(CalledL)
-                    && isSimpllFieldAccessAbstraction(CalledR)
-                    && isa<PointerType>(CL->getType())
-                    && isa<PointerType>(CR->getType())
-                    && (dyn_cast<PointerType>(CL->getType())->getElementType()
-                        != dyn_cast<PointerType>(CR->getType())
-                                   ->getElementType())) {
-                    // It is possible that the abstractions are a part of a
-                    // longer field access chain. In this case it is necessary
-                    // to look for the possibility of a structure type change in
-                    // the previous field access call (which wouldn't be done
-                    // otherwise because the detection is based on loads).
-                    // Note: the fact that the chain hasn't been generated as a
-                    // single abstraction is caused by Clang separating the
-                    // debug scopes of each part.
-                    // Note 2: this has to be done even if the operations are
-                    // equal, since field accesses return a pointer and all
-                    // pointers are compared as equal in FunctionComparator.
-                    auto FACallL = dyn_cast<CallInst>(CL->getOperand(0));
-                    auto FACallR = dyn_cast<CallInst>(CR->getOperand(0));
-                    auto FAOpL = FACallL ? getCalledFunction(
-                                         FACallL->getCalledValue())
-                                         : nullptr;
-                    auto FAOpR = FACallR ? getCalledFunction(
-                                         FACallR->getCalledValue())
-                                         : nullptr;
-
-                    // Check whether the field access operand is another field
-                    // access. Furthermore check if the second field access
-                    // takes a structure pointer.
-                    if (FAOpL && FAOpR && isSimpllFieldAccessAbstraction(FAOpL)
-                        && isSimpllFieldAccessAbstraction(FAOpR)) {
-                        // Field access operand is another field access call.
-                        // Compare all of its source types for structure tsype
-                        // differences.
-                        findTypeDifferences(FAOpL,
-                                            FAOpR,
-                                            L->getFunction(),
-                                            R->getFunction());
-                    }
-                }
-
                 if (CalledL->getName() == CalledR->getName()) {
                     // Check whether both instructions call an alloc function.
                     if (isAllocFunction(*CalledL)) {
@@ -270,25 +236,7 @@ int DifferentialFunctionComparator::cmpOperations(
                         return cmpCallsWithExtraArg(CL, CR);
                     }
                 }
-
-                if (Result)
-                    processCallInstDifference(CL, CR);
             }
-        } else {
-            // If just one of the instructions is a call, it is possible that
-            // some logic has been moved into a function. We'll try to inline
-            // that function and compare again.
-            if (isa<CallInst>(L)
-                && !isSimpllAbstractionDeclaration(getCalledFunction(
-                        dyn_cast<CallInst>(L)->getCalledValue())))
-                ModComparator->tryInline = {dyn_cast<CallInst>(L), nullptr};
-            else if (isa<CallInst>(R)
-                     && !isSimpllAbstractionDeclaration(getCalledFunction(
-                             dyn_cast<CallInst>(R)->getCalledValue())))
-                ModComparator->tryInline = {nullptr, dyn_cast<CallInst>(R)};
-
-            // Look for a macro-function difference.
-            findMacroFunctionDifference(L, R);
         }
     }
 
@@ -348,69 +296,6 @@ int DifferentialFunctionComparator::cmpOperations(
                 return cmpNumbers(dyn_cast<AllocaInst>(L)->getAlignment(),
                                   dyn_cast<AllocaInst>(R)->getAlignment());
         }
-        // Check whether there is an additional cast because of a structure type
-        // change.
-        if (isa<CastInst>(L) || isa<CastInst>(R)) {
-            auto Cast = isa<CastInst>(L) ? dyn_cast<CastInst>(L)
-                                         : dyn_cast<CastInst>(R);
-            Value *Op = stripAllCasts(Cast->getOperand(0));
-            CallInst *CI;
-            LoadInst *LI;
-            Function *Fun;
-            PointerType *PTy;
-            StructType *STy;
-            // Check if the operator of a cast is a call to a field access
-            // abstraction from a named structure type (either directly or
-            // through a load).
-            if (((CI = dyn_cast<CallInst>(Op))
-                 || ((LI = dyn_cast<LoadInst>(Op))
-                     && (CI = dyn_cast<CallInst>(
-                                 stripAllCasts(LI->getOperand(0))))))
-                && (Fun = getCalledFunction(CI->getCalledValue()))
-                && isSimpllFieldAccessAbstraction(Fun)
-                && (PTy = dyn_cast<PointerType>(CI->getOperand(0)->getType()))
-                && (STy = dyn_cast<StructType>(PTy->getPointerElementType()))
-                && STy->hasName()) {
-                // Value is casted after being extracted from a structure.
-                // There is probably a change in the structure type causing
-                // the cast.
-                // Try to find the type in the other structure.
-                auto OtherSTy = R->getModule()->getTypeByName(STy->getName());
-                if (OtherSTy) {
-                    if (Cast == L)
-                        findTypeDifference(STy,
-                                           OtherSTy,
-                                           L->getFunction(),
-                                           R->getFunction());
-                    else
-                        findTypeDifference(OtherSTy,
-                                           STy,
-                                           L->getFunction(),
-                                           R->getFunction());
-                }
-            }
-        }
-        // Check whether there is a load type difference because of a structure
-        // type change.
-        if (isa<LoadInst>(L) && isa<LoadInst>(R)
-            && cmpTypes(L->getType(), R->getType())) {
-            Value *OpL = stripAllCasts(L->getOperand(0));
-            Value *OpR = stripAllCasts(R->getOperand(0));
-            CallInst *CL;
-            CallInst *CR;
-            Function *FL;
-            Function *FR;
-            // Check whether both load instructions operate on the return value
-            // of a call of a field access abstraction from named structure
-            // types of the same name.
-            if ((CL = dyn_cast<CallInst>(OpL)) && (CR = dyn_cast<CallInst>(OpR))
-                && (FL = getCalledFunction(CL->getCalledValue()))
-                && (FR = getCalledFunction(CR->getCalledValue()))
-                && isSimpllFieldAccessAbstraction(FL)
-                && isSimpllFieldAccessAbstraction(FR)) {
-                findTypeDifferences(FL, FR, L->getFunction(), R->getFunction());
-            }
-        }
         // Handle inverse conditions
         if (isa<CmpInst>(L) && isa<CmpInst>(R)) {
             auto CmpL = dyn_cast<CmpInst>(L);
@@ -435,9 +320,6 @@ int DifferentialFunctionComparator::cmpOperations(
                 }
             }
         }
-        auto macroDiffs = ModComparator->MacroDiffs.findMacroDifferences(L, R);
-        ModComparator->ComparedFuns.at({FnL, FnR})
-                .addDifferingObjects(std::move(macroDiffs));
     }
 
     return Result;
@@ -699,27 +581,6 @@ bool DifferentialFunctionComparator::cmpCallArgumentUsingCSource(
         Value *OpL,
         Value *OpR,
         unsigned i) const {
-    if (OpL == CIL->getCalledValue()) {
-        Function *CalledL = getCalledFunction(OpL);
-        Function *CalledR = getCalledFunction(OpR);
-
-        if (isSimpllFieldAccessAbstraction(CalledL)
-            && isSimpllFieldAccessAbstraction(CalledR)) {
-            // Check for type difference inside called field access
-            // abstraction.
-            // Note 1: usually a type difference is found when loading
-            // or on an additional cast. However if the field access
-            // consists of multiple GEP instructions, there may be a
-            // differing structure type causing one of them having a
-            // different type without the presence of a cast or load.
-            // Note 2: this cannot be done in cmpFieldAccess, because
-            // a pointer to the function where the difference was found
-            // is needed to correctly generate the diff.
-            findTypeDifferences(
-                    CalledL, CalledR, CIL->getFunction(), CIR->getFunction());
-        }
-    }
-
     // Try to prepare C source argument values to be used in operand
     // comparison.
     std::vector<std::string> CArgsL, CArgsR;
@@ -847,29 +708,18 @@ int DifferentialFunctionComparator::cmpBasicBlocks(
             if (Res) {
                 // The instructions are indeed different, try to find the source
                 // of the difference.
-
-                // Try to find macros that could be causing the difference
-                auto macroDiffs =
-                        ModComparator->MacroDiffs.findMacroDifferences(&*InstL,
-                                                                       &*InstR);
-                ModComparator->ComparedFuns.at({FnL, FnR})
-                        .addDifferingObjects(std::move(macroDiffs));
-
-                // Try to find assembly functions causing the difference
-                if (isa<CallInst>(&*InstL) && isa<CallInst>(&*InstR)
-                    && config.PrintAsmDiffs) {
-                    ModComparator->ComparedFuns.at({FnL, FnR})
-                            .addDifferingObjects(findAsmDifference(
-                                    dyn_cast<CallInst>(&*InstL),
-                                    dyn_cast<CallInst>(&*InstR)));
-                }
-
-                if (isa<CallInst>(&*InstL) && isa<CallInst>(&*InstR))
-                    processCallInstDifference(dyn_cast<CallInst>(&*InstL),
-                                              dyn_cast<CallInst>(&*InstR));
-
+                findDifference(&*InstL, &*InstR);
                 return Res;
             }
+        }
+
+        if (isa<CallInst>(&*InstL) && isa<CallInst>(&*InstR)) {
+            // Try to find a type difference in field accesses.
+            // This has to be done even if the operations are equal, since field
+            // accesses return a pointer and all pointers are compared as equal
+            // in FunctionComparator.
+            findTypeDifferenceInFieldAccess(dyn_cast<CallInst>(&*InstL),
+                                            dyn_cast<CallInst>(&*InstR));
         }
 
         ++InstL;
@@ -1360,4 +1210,148 @@ int DifferentialFunctionComparator::cmpOperationsWithOperands(
         }
     }
     return 0;
+}
+
+/// Try to find a syntax difference that could be causing the semantic
+/// difference that was found. Looks for differences that cannot be detected
+/// by simply diffing the compared functions - differences in macros, inline
+/// assembly code, or in types.
+void DifferentialFunctionComparator::findDifference(
+        const Instruction *L, const Instruction *R) const {
+    // Try to find macros that could be causing the difference
+    auto macroDiffs = ModComparator->MacroDiffs.findMacroDifferences(&*L, &*R);
+    ModComparator->ComparedFuns.at({FnL, FnR})
+            .addDifferingObjects(std::move(macroDiffs));
+
+    // If the instructions are calls, try some additional methods to locate the
+    // difference.
+    if (isa<CallInst>(&*L) || isa<CallInst>(&*R)) {
+        auto *CallL = dyn_cast<CallInst>(&*L);
+        auto *CallR = dyn_cast<CallInst>(&*R);
+        auto *CalledL =
+                CallL ? getCalledFunction(CallL->getCalledValue()) : nullptr;
+        auto *CalledR =
+                CallR ? getCalledFunction(CallR->getCalledValue()) : nullptr;
+
+        if (CallL && CallR) {
+            if (config.PrintAsmDiffs) {
+                // Try to find assembly functions causing the difference
+                ModComparator->ComparedFuns.at({FnL, FnR})
+                        .addDifferingObjects(findAsmDifference(CallL, CallR));
+            }
+
+            processCallInstDifference(CallL, CallR);
+        } else {
+            // If just one of the instructions is a call, it is possible that
+            // some logic has been moved into a function. We'll try to inline
+            // that function and compare again.
+            if (CallL && !isSimpllAbstractionDeclaration(CalledL))
+                ModComparator->tryInline = {CallL, nullptr};
+            else if (CallR && !isSimpllAbstractionDeclaration(CalledR))
+                ModComparator->tryInline = {nullptr, CallR};
+
+            // Look for a macro-function difference.
+            findMacroFunctionDifference(&*L, &*R);
+        }
+    }
+
+    // Check whether there is an additional cast because of a structure type
+    // change.
+    if (isa<CastInst>(L) || isa<CastInst>(R)) {
+        auto Cast = isa<CastInst>(L) ? dyn_cast<CastInst>(L)
+                                     : dyn_cast<CastInst>(R);
+        Value *Op = stripAllCasts(Cast->getOperand(0));
+        CallInst *CI;
+        LoadInst *LI;
+        Function *Fun;
+        PointerType *PTy;
+        StructType *STy;
+        // Check if the operator of a cast is a call to a field access
+        // abstraction from a named structure type (either directly or through a
+        // load).
+        if (((CI = dyn_cast<CallInst>(Op))
+             || ((LI = dyn_cast<LoadInst>(Op))
+                 && (CI = dyn_cast<CallInst>(
+                             stripAllCasts(LI->getOperand(0))))))
+            && (Fun = getCalledFunction(CI->getCalledValue()))
+            && isSimpllFieldAccessAbstraction(Fun)
+            && (PTy = dyn_cast<PointerType>(CI->getOperand(0)->getType()))
+            && (STy = dyn_cast<StructType>(PTy->getPointerElementType()))
+            && STy->hasName()) {
+            // Value is casted after being extracted from a structure.
+            // There is probably a change in the structure type causing
+            // the cast.
+            // Try to find the type in the other structure.
+            auto OtherSTy = R->getModule()->getTypeByName(STy->getName());
+            if (OtherSTy) {
+                if (Cast == L)
+                    findTypeDifference(
+                            STy, OtherSTy, L->getFunction(), R->getFunction());
+                else
+                    findTypeDifference(
+                            OtherSTy, STy, L->getFunction(), R->getFunction());
+            }
+        }
+    }
+
+    // Check whether there is a load type difference because of a structure type
+    // change.
+    if (isa<LoadInst>(L) && isa<LoadInst>(R)
+        && cmpTypes(L->getType(), R->getType())) {
+        Value *OpL = stripAllCasts(L->getOperand(0));
+        Value *OpR = stripAllCasts(R->getOperand(0));
+        CallInst *CL;
+        CallInst *CR;
+        Function *FL;
+        Function *FR;
+        // Check whether both load instructions operate on the return value of a
+        // call of a field access abstraction from named structure types of the
+        // same name.
+        if ((CL = dyn_cast<CallInst>(OpL)) && (CR = dyn_cast<CallInst>(OpR))
+            && (FL = getCalledFunction(CL->getCalledValue()))
+            && (FR = getCalledFunction(CR->getCalledValue()))
+            && isSimpllFieldAccessAbstraction(FL)
+            && isSimpllFieldAccessAbstraction(FR)) {
+            findTypeDifferences(FL, FR, L->getFunction(), R->getFunction());
+        }
+    }
+}
+
+/// Find type differences between calls to field access abstractions.
+void DifferentialFunctionComparator::findTypeDifferenceInFieldAccess(
+        const CallInst *CL, const CallInst *CR) const {
+    const Function *CalledL = getCalledFunction(CL->getCalledValue());
+    const Function *CalledR = getCalledFunction(CR->getCalledValue());
+
+    if (isSimpllFieldAccessAbstraction(CalledL)
+        && isSimpllFieldAccessAbstraction(CalledR)
+        && isa<PointerType>(CL->getType()) && isa<PointerType>(CR->getType())
+        && (dyn_cast<PointerType>(CL->getType())->getElementType()
+            != dyn_cast<PointerType>(CR->getType())->getElementType())) {
+        // It is possible that the abstractions are a part of a longer field
+        // access chain. In this case it is necessary to look for the
+        // possibility of a structure type change in the previous field access
+        // call (which wouldn't be done otherwise because the detection is based
+        // on loads).
+        // Note: the fact that the chain hasn't been generated as a single
+        // abstraction is caused by Clang separating the debug scopes of each
+        // part.
+        auto FACallL = dyn_cast<CallInst>(CL->getOperand(0));
+        auto FACallR = dyn_cast<CallInst>(CR->getOperand(0));
+        auto FAOpL = FACallL ? getCalledFunction(FACallL->getCalledValue())
+                             : nullptr;
+        auto FAOpR = FACallR ? getCalledFunction(FACallR->getCalledValue())
+                             : nullptr;
+
+        // Check whether the field access operand is another field access.
+        // Furthermore check if the second field access takes a structure
+        // pointer.
+        if (FAOpL && FAOpR && isSimpllFieldAccessAbstraction(FAOpL)
+            && isSimpllFieldAccessAbstraction(FAOpR)) {
+            // Field access operand is another field access call.
+            // Compare all of its source types for structure type differences.
+            findTypeDifferences(
+                    FAOpL, FAOpR, CL->getFunction(), CR->getFunction());
+        }
+    }
 }

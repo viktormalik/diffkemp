@@ -492,46 +492,6 @@ TEST_F(DifferentialFunctionComparatorTest, CmpAttrs) {
     ASSERT_EQ(DiffComp->testCmpAttrs(L, R), 0);
 }
 
-/// Tests operation comparison on cases when inlining should be triggered.
-TEST_F(DifferentialFunctionComparatorTest, CmpOperationsInlining) {
-    bool needToCmpOperands;
-
-    // Create auxilliary functions for the purpose of inlining tests.
-    Function *AuxFL = Function::Create(
-            FunctionType::get(Type::getVoidTy(CtxL), {}, false),
-            GlobalValue::ExternalLinkage,
-            "AuxFL",
-            &ModL);
-    Function *AuxFR = Function::Create(
-            FunctionType::get(Type::getVoidTy(CtxR), {}, false),
-            GlobalValue::ExternalLinkage,
-            "AuxFR",
-            &ModR);
-
-    BasicBlock *BBL = BasicBlock::Create(CtxL, "", FL);
-    BasicBlock *BBR = BasicBlock::Create(CtxR, "", FR);
-
-    // Test inlining on the left.
-    CallInst *CL = CallInst::Create(AuxFL->getFunctionType(), AuxFL, "", BBL);
-    AllocaInst *AllR = new AllocaInst(Type::getInt8Ty(CtxR), 0, "var", BBR);
-
-    ASSERT_EQ(DiffComp->testCmpOperations(CL, AllR, needToCmpOperands), 1);
-    std::pair<const CallInst *, const CallInst *> expectedPair{CL, nullptr};
-    ASSERT_EQ(ModComp->tryInline, expectedPair);
-
-    // Test inlining on the right.
-    ModComp->tryInline = {nullptr, nullptr};
-    AllocaInst *AllL = new AllocaInst(Type::getInt8Ty(CtxL), 0, "var", BBL);
-    CallInst *CR = CallInst::Create(AuxFR->getFunctionType(), AuxFR, "", BBR);
-
-    ASSERT_EQ(DiffComp->testCmpOperations(AllL, CR, needToCmpOperands), -1);
-    expectedPair = {nullptr, CR};
-    ASSERT_EQ(ModComp->tryInline, expectedPair);
-
-    // Note: inlining on both sides is triggered by cmpBasicBlocks, therefore it
-    // is tested in its tests and not here.
-}
-
 /// Tests specific comparison of intermediate comparison operations in cases
 /// when the signedness differs while comparing with control flow only.
 TEST_F(DifferentialFunctionComparatorTest, CmpOperationsICmp) {
@@ -843,9 +803,13 @@ TEST_F(DifferentialFunctionComparatorTest, CmpTypes) {
 /// Tests whether calls are properly marked for inlining while comparing
 /// basic blocks.
 TEST_F(DifferentialFunctionComparatorTest, CmpBasicBlocksInlining) {
-    // Create the basic blocks.
+    // Create the basic blocks with terminator instructions (to make sure that
+    // after skipping the alloca created below, the end of the block is not
+    // encountered).
     BasicBlock *BBL = BasicBlock::Create(CtxL, "", FL);
+    auto *RetL = ReturnInst::Create(CtxL, BBL);
     BasicBlock *BBR = BasicBlock::Create(CtxR, "", FR);
+    auto *RetR = ReturnInst::Create(CtxR, BBR);
 
     // Create auxilliary functions to inline.
     Function *AuxFL = Function::Create(
@@ -861,24 +825,45 @@ TEST_F(DifferentialFunctionComparatorTest, CmpBasicBlocksInlining) {
             "AuxFR",
             &ModR);
 
-    // Test inlining.
-    CallInst *CL =
-            CallInst::Create(AuxFL->getFunctionType(),
-                             AuxFL,
-                             {ConstantInt::get(Type::getInt32Ty(CtxL), 5)},
-                             "",
-                             BBL);
-    CallInst *CR =
-            CallInst::Create(AuxFR->getFunctionType(),
-                             AuxFR,
-                             {ConstantInt::get(Type::getInt32Ty(CtxR), 6)},
-                             "",
-                             BBR);
+    // Test inlining on the left.
+    CallInst *CL = CallInst::Create(AuxFL->getFunctionType(), AuxFL, "", RetL);
+    AllocaInst *AllR = new AllocaInst(Type::getInt8Ty(CtxR), 0, "var", RetR);
+
+    ASSERT_EQ(DiffComp->testCmpBasicBlocks(BBL, BBR), 1);
+    std::pair<const CallInst *, const CallInst *> expectedPair{CL, nullptr};
+    ASSERT_EQ(ModComp->tryInline, expectedPair);
+
+    CL->eraseFromParent();
+    AllR->eraseFromParent();
+
+    // Test inlining on the right.
+    ModComp->tryInline = {nullptr, nullptr};
+    AllocaInst *AllL = new AllocaInst(Type::getInt8Ty(CtxL), 0, "var", RetL);
+    CallInst *CR = CallInst::Create(AuxFR->getFunctionType(), AuxFR, "", RetR);
+
+    ASSERT_EQ(DiffComp->testCmpBasicBlocks(BBL, BBR), -1);
+    expectedPair = {nullptr, CR};
+    ASSERT_EQ(ModComp->tryInline, expectedPair);
+
+    AllL->eraseFromParent();
+    CR->eraseFromParent();
+
+    // Test inlining on both sides.
+    CL = CallInst::Create(AuxFL->getFunctionType(),
+                          AuxFL,
+                          {ConstantInt::get(Type::getInt32Ty(CtxL), 5)},
+                          "",
+                          RetL);
+    CR = CallInst::Create(AuxFR->getFunctionType(),
+                          AuxFR,
+                          {ConstantInt::get(Type::getInt32Ty(CtxR), 6)},
+                          "",
+                          RetR);
     ReturnInst::Create(CtxL, BBL);
     ReturnInst::Create(CtxR, BBR);
 
     ASSERT_EQ(DiffComp->testCmpBasicBlocks(BBL, BBR), 1);
-    std::pair<const CallInst *, const CallInst *> expectedPair{CL, CR};
+    expectedPair = {CL, CR};
     ASSERT_EQ(ModComp->tryInline, expectedPair);
 }
 
