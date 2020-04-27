@@ -829,7 +829,7 @@ TEST_F(DifferentialFunctionComparatorTest, CmpBasicBlocksInlining) {
     CallInst *CL = CallInst::Create(AuxFL->getFunctionType(), AuxFL, "", RetL);
     AllocaInst *AllR = new AllocaInst(Type::getInt8Ty(CtxR), 0, "var", RetR);
 
-    ASSERT_EQ(DiffComp->testCmpBasicBlocks(BBL, BBR), 1);
+    DiffComp->testCmpBasicBlocks(BBL, BBR);
     std::pair<const CallInst *, const CallInst *> expectedPair{CL, nullptr};
     ASSERT_EQ(ModComp->tryInline, expectedPair);
 
@@ -841,7 +841,7 @@ TEST_F(DifferentialFunctionComparatorTest, CmpBasicBlocksInlining) {
     AllocaInst *AllL = new AllocaInst(Type::getInt8Ty(CtxL), 0, "var", RetL);
     CallInst *CR = CallInst::Create(AuxFR->getFunctionType(), AuxFR, "", RetR);
 
-    ASSERT_EQ(DiffComp->testCmpBasicBlocks(BBL, BBR), -1);
+    DiffComp->testCmpBasicBlocks(BBL, BBR);
     expectedPair = {nullptr, CR};
     ASSERT_EQ(ModComp->tryInline, expectedPair);
 
@@ -862,7 +862,7 @@ TEST_F(DifferentialFunctionComparatorTest, CmpBasicBlocksInlining) {
     ReturnInst::Create(CtxL, BBL);
     ReturnInst::Create(CtxR, BBR);
 
-    ASSERT_EQ(DiffComp->testCmpBasicBlocks(BBL, BBR), 1);
+    DiffComp->testCmpBasicBlocks(BBL, BBR);
     expectedPair = {CL, CR};
     ASSERT_EQ(ModComp->tryInline, expectedPair);
 }
@@ -1070,7 +1070,7 @@ TEST_F(DifferentialFunctionComparatorTest, CmpValuesPointerCasts) {
 
     // First, cmpBasicBlocks must be run to identify instructions to ignore
     // and then, cmpValues should ignore those instructions.
-    ASSERT_EQ(DiffComp->testCmpBasicBlocks(BBL, BBR), 0);
+    DiffComp->testCmpBasicBlocks(BBL, BBR);
     ASSERT_EQ(DiffComp->testCmpValues(PtrL, PtrR, true), 0);
     ASSERT_EQ(DiffComp->testCmpValues(CastL, PtrR, true), 0);
 }
@@ -1094,13 +1094,13 @@ TEST_F(DifferentialFunctionComparatorTest, CmpValuesCastFromUnion) {
 
     // First, cmpBasicBlocks must be run to identify instructions to ignore
     // and then, cmpValues should ignore those instructions.
-    ASSERT_EQ(DiffComp->testCmpBasicBlocks(BBL, BBR), 0);
+    DiffComp->testCmpBasicBlocks(BBL, BBR);
     ASSERT_EQ(DiffComp->testCmpValues(CastL, ConstR), 0);
 
     BBR->getTerminator()->eraseFromParent();
     ReturnInst::Create(CtxR, ConstR2, BBR);
 
-    ASSERT_EQ(DiffComp->testCmpBasicBlocks(BBL, BBR), 1);
+    DiffComp->testCmpBasicBlocks(BBL, BBR);
     ASSERT_EQ(DiffComp->testCmpValues(CastL, ConstR2), 1);
 }
 
@@ -1118,11 +1118,11 @@ TEST_F(DifferentialFunctionComparatorTest, CmpValuesIntTrunc) {
 
     // First, cmpBasicBlocks must be run to identify instructions to ignore
     // and then, cmpValues should ignore those instructions.
-    ASSERT_EQ(DiffComp->testCmpBasicBlocks(BBL, BBR), 1);
+    DiffComp->testCmpBasicBlocks(BBL, BBR);
     ASSERT_EQ(DiffComp->testCmpValues(CastL, ConstR), -1);
 
     Conf.ControlFlowOnly = true;
-    ASSERT_EQ(DiffComp->testCmpBasicBlocks(BBL, BBR), 0);
+    DiffComp->testCmpBasicBlocks(BBL, BBR);
     ASSERT_EQ(DiffComp->testCmpValues(CastL, ConstR), 0);
     ASSERT_EQ(DiffComp->testCmpValues(ConstR, CastL), 0);
     Conf.ControlFlowOnly = false;
@@ -1144,7 +1144,7 @@ TEST_F(DifferentialFunctionComparatorTest, CmpValuesIntExt) {
 
     // First, cmpBasicBlocks must be run to identify instructions to ignore
     // and then, cmpValues should ignore those instructions.
-    ASSERT_EQ(DiffComp->testCmpBasicBlocks(BBL, BBR), 1);
+    DiffComp->testCmpBasicBlocks(BBL, BBR);
     ASSERT_EQ(DiffComp->testCmpValues(CastL, ConstR), 0);
 
     CastL->eraseFromParent();
@@ -1159,7 +1159,7 @@ TEST_F(DifferentialFunctionComparatorTest, CmpValuesIntExt) {
     ReturnInst::Create(CtxL, ArithmL, BBL);
     ReturnInst::Create(CtxR, ArithmR, BBR);
 
-    ASSERT_EQ(DiffComp->testCmpBasicBlocks(BBL, BBR), 1);
+    DiffComp->testCmpBasicBlocks(BBL, BBR);
     ASSERT_EQ(DiffComp->testCmpValues(CastL2, ConstR), -1);
 }
 

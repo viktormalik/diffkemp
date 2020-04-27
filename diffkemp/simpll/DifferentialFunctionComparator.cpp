@@ -29,11 +29,21 @@
 std::set<std::string> ignoredMacroList = {
         "__COUNTER__", "__FILE__", "__LINE__", "__DATE__", "__TIME__"};
 
+/// Initialize relocation info
+void DifferentialFunctionComparator::beginCompare() {
+    FunctionComparator::beginCompare();
+    Reloc.status = RelocationInfo::None;
+}
+
 /// Run comparison of PHI instructions after comparing everything else. This is
 /// to ensure that values and blocks incoming to PHIs are properly matched in
 /// time of PHI comparison.
 int DifferentialFunctionComparator::compare() {
     int Res = FunctionComparator::compare();
+    // The result is 1 (not equal) if there is an unmatched relocation (since
+    // that means that one of the functions has some extra code).
+    if (Reloc.status != RelocationInfo::None)
+        return 1;
     if (Res == 0) {
         for (auto &PhiPair : phisToCompare)
             if (cmpPHIs(PhiPair.first, PhiPair.second))
@@ -716,11 +726,65 @@ int DifferentialFunctionComparator::cmpBasicBlocks(
                 continue;
             }
 
+            if (Reloc.status == RelocationInfo::Stored) {
+                // If there is an inequality found and we have previously found
+                // a possibly relocated block, try to match it now.
+                Reloc.status = RelocationInfo::Matching;
+                DEBUG_WITH_TYPE(DEBUG_SIMPLL,
+                                dbgs() << "Try to match the relocated block\n");
+                // Reset serial counters since the instructions are not equal
+                sn_mapL.erase(&*InstL);
+                sn_mapR.erase(&*InstR);
+                // Move instruction in the module that contains the relocated
+                // block to the block beginning and re-run the comparison.
+                // Also, backup the moved instruction so that we know where to
+                // restore the comparison from after the block is matched.
+                if (Reloc.prog == Program::First) {
+                    Reloc.restore = InstL;
+                    InstL = Reloc.begin;
+                    continue;
+                } else {
+                    Reloc.restore = InstR;
+                    InstR = Reloc.begin;
+                    continue;
+                }
+            }
+
+            // Try to find a match by moving one of the instruction iterators
+            // forward (find a code relocation).
+            if (Reloc.status == RelocationInfo::None) {
+                if (findMatchingOpWithOffset(InstL, InstR, Program::Second)
+                    || findMatchingOpWithOffset(InstL, InstR, Program::First)) {
+                    Res = 0;
+                }
+            }
+
             if (Res) {
                 // The instructions are indeed different, try to find the source
                 // of the difference.
                 findDifference(&*InstL, &*InstR);
                 return Res;
+            }
+        } else {
+            if (Reloc.status == RelocationInfo::Matching) {
+                // If the relocated code has been entirely matched, we can
+                // continue from the restore point.
+                if (Reloc.prog == Program::First && InstL == Reloc.end) {
+                    DEBUG_WITH_TYPE(DEBUG_SIMPLL,
+                                    dbgs() << "Relocated block matched\n");
+                    InstL = Reloc.restore;
+                    InstR++;
+                    Reloc.status = RelocationInfo::None;
+                    continue;
+                } else if (Reloc.prog == Program::Second
+                           && InstR == Reloc.end) {
+                    DEBUG_WITH_TYPE(DEBUG_SIMPLL,
+                                    dbgs() << "Relocated block matched\n");
+                    InstL++;
+                    InstR = Reloc.restore;
+                    Reloc.status = RelocationInfo::None;
+                    continue;
+                }
             }
         }
 
@@ -1423,4 +1487,57 @@ void DifferentialFunctionComparator::findTypeDifferenceInChainedFieldAccess(
                     FAOpL, FAOpR, CL->getFunction(), CR->getFunction());
         }
     }
+}
+
+/// Try to find a matching instruction that has been moved forward in one of
+/// the basic blocks. If such an instruction is found, the relocation Reloc is
+/// made valid and its begin and end are set to the first and the last
+/// instructions of the block that was skipped during the search.
+/// \param InstL Starting instruction in the first program.
+/// \param InstR Starting instruction in the second program.
+/// \param prog_to_search The program to search a matching instruction in (the
+///                       corresponding iterator will be moved).
+/// \return True if a matching instruction was found, otherwise false.
+bool DifferentialFunctionComparator::findMatchingOpWithOffset(
+        BasicBlock::const_iterator &InstL,
+        BasicBlock::const_iterator &InstR,
+        Program prog_to_search) const {
+    // Choose which instruction will be moved and backup it
+    auto &MovedInst = prog_to_search == Program::First ? InstL : InstR;
+    auto MovedInstBackup = MovedInst;
+
+    // Mark the possible relocation beginning.
+    Reloc.begin = MovedInst;
+
+    auto BBEnd = MovedInst->getParent()->end();
+
+    // Reset the serial counters since InstL and InstR were already compared as
+    // non-equal and start from the following instruction.
+    sn_mapL.erase(&*InstL);
+    sn_mapR.erase(&*InstR);
+    ++MovedInst;
+    while (MovedInst != BBEnd) {
+        auto sn_mapL_backup = sn_mapL;
+        auto sn_mapR_backup = sn_mapR;
+        if (cmpOperationsWithOperands(&*InstL, &*InstR) == 0) {
+            // Found possible relocation - mark the end.
+            Reloc.end = MovedInst;
+            Reloc.end--;
+            Reloc.status = RelocationInfo::Stored;
+            Reloc.prog = prog_to_search;
+            DEBUG_WITH_TYPE(DEBUG_SIMPLL,
+                            dbgs() << getDebugIndent()
+                                   << "Possible relocation found:\n"
+                                   << "    from: " << *Reloc.begin << "\n"
+                                   << "      to: " << *Reloc.end << "\n");
+            return true;
+        }
+        // Restore serial maps since the instructions do not match
+        sn_mapL = sn_mapL_backup;
+        sn_mapR = sn_mapR_backup;
+
+        MovedInst++;
+    }
+    MovedInst = MovedInstBackup;
+    return false;
 }
