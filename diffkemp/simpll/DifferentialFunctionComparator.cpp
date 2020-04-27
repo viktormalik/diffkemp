@@ -706,10 +706,13 @@ int DifferentialFunctionComparator::cmpBasicBlocks(
                 sn_mapR.erase(&*InstR);
                 // One of the compared operations will be skipped and the
                 // comparison will be repeated.
-                if (mayIgnore(&*InstL))
+                if (mayIgnore(&*InstL)) {
+                    ignoredInstructions.insert(&*InstL);
                     InstL++;
-                else
+                } else {
+                    ignoredInstructions.insert(&*InstR);
                     InstR++;
+                }
                 continue;
             }
 
@@ -1005,16 +1008,18 @@ int DifferentialFunctionComparator::cmpValues(const Value *L,
     const User *UR = dyn_cast<User>(R);
     const User *CL = (UL && (isCast(UL) || isZeroGEP(UL))) ? UL : nullptr;
     const User *CR = (UR && (isCast(UR) || isZeroGEP(UR))) ? UR : nullptr;
+    bool isIgnoredL = ignoredInstructions.find(L) != ignoredInstructions.end();
+    bool isIgnoredR = ignoredInstructions.find(R) != ignoredInstructions.end();
 
-    if (CL && CR && mayIgnore(CL) && mayIgnore(CR)) {
+    if (CL && CR && isIgnoredL && isIgnoredR) {
         // Both instruction are casts - compare the original values before
         // the cast
         return cmpValues(CL->getOperand(0), CR->getOperand(0));
-    } else if (CL && mayIgnore(CL)) {
+    } else if (CL && isIgnoredL) {
         // The left value is a cast - use the original value of it in the
         // comparison
         return cmpValues(CL->getOperand(0), R);
-    } else if (CR && mayIgnore(CR)) {
+    } else if (CR && isIgnoredR) {
         // The right value is a cast - use the original value of it in the
         // comparison
         return cmpValues(L, CR->getOperand(0));
@@ -1264,6 +1269,14 @@ int DifferentialFunctionComparator::cmpOperationsWithOperands(
             Value *OpR = R->getOperand(i);
 
             if (int Res = cmpValues(OpL, OpR)) {
+                auto *UserL = dyn_cast<User>(OpL);
+                auto *UserR = dyn_cast<User>(OpR);
+                if (UserL && mayIgnore(UserL)) {
+                    return cmpValues(UserL->getOperand(0), OpR);
+                }
+                if (UserR && mayIgnore(UserR)) {
+                    return cmpValues(OpL, UserR->getOperand(0));
+                }
                 if (isa<CallInst>(L) && isa<CallInst>(R)) {
                     Res = cmpCallArgumentUsingCSource(dyn_cast<CallInst>(L),
                                                       dyn_cast<CallInst>(R),

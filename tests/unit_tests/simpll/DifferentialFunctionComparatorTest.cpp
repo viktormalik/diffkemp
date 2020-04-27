@@ -1047,7 +1047,7 @@ TEST_F(DifferentialFunctionComparatorTest, CmpGlobalValuesMissingDefs) {
     ASSERT_EQ(ModComp->MissingDefs[0].second, GVR1);
 }
 
-/// Tests comparison of pointer casts using cmpValues.
+/// Tests ignoring of pointer casts using cmpBasicBlocks and cmpValues.
 TEST_F(DifferentialFunctionComparatorTest, CmpValuesPointerCasts) {
     BasicBlock *BBL = BasicBlock::Create(CtxL, "", FL);
     BasicBlock *BBR = BasicBlock::Create(CtxR, "", FR);
@@ -1064,17 +1064,19 @@ TEST_F(DifferentialFunctionComparatorTest, CmpValuesPointerCasts) {
                              BBR);
     CastInst *CastL = new BitCastInst(
             PtrL, PointerType::get(Type::getInt32Ty(CtxL), 0), "", BBL);
-    CastInst *CastR = new BitCastInst(
-            PtrR, PointerType::get(Type::getInt16Ty(CtxR), 0), "", BBR);
 
-    ASSERT_EQ(DiffComp->testCmpValues(PtrL, PtrR), 0);
-    ASSERT_EQ(DiffComp->testCmpValues(CastL, CastR, true), 0);
-    ASSERT_EQ(DiffComp->testCmpValues(PtrL, CastR, true), 0);
+    ReturnInst::Create(CtxL, CastL, BBL);
+    ReturnInst::Create(CtxR, PtrR, BBR);
+
+    // First, cmpBasicBlocks must be run to identify instructions to ignore
+    // and then, cmpValues should ignore those instructions.
+    ASSERT_EQ(DiffComp->testCmpBasicBlocks(BBL, BBR), 0);
+    ASSERT_EQ(DiffComp->testCmpValues(PtrL, PtrR, true), 0);
     ASSERT_EQ(DiffComp->testCmpValues(CastL, PtrR, true), 0);
 }
 
-/// Test the comparison of a cast from a union type with a case without the
-/// cast using cmpValues.
+/// Test ignoring of a cast from a union type using cmpBasicBlocks and
+/// cmpValues.
 TEST_F(DifferentialFunctionComparatorTest, CmpValuesCastFromUnion) {
     BasicBlock *BBL = BasicBlock::Create(CtxL, "", FL);
     BasicBlock *BBR = BasicBlock::Create(CtxR, "", FR);
@@ -1087,14 +1089,22 @@ TEST_F(DifferentialFunctionComparatorTest, CmpValuesCastFromUnion) {
     Constant *ConstR2 = ConstantInt::get(Type::getInt8Ty(CtxR), 1);
     CastInst *CastL = new BitCastInst(ConstL, Type::getInt8Ty(CtxL), "", BBL);
 
+    ReturnInst::Create(CtxL, CastL, BBL);
+    ReturnInst::Create(CtxR, ConstR, BBR);
+
+    // First, cmpBasicBlocks must be run to identify instructions to ignore
+    // and then, cmpValues should ignore those instructions.
+    ASSERT_EQ(DiffComp->testCmpBasicBlocks(BBL, BBR), 0);
     ASSERT_EQ(DiffComp->testCmpValues(CastL, ConstR), 0);
-    ASSERT_EQ(DiffComp->testCmpValues(ConstR, CastL), 0);
+
+    BBR->getTerminator()->eraseFromParent();
+    ReturnInst::Create(CtxR, ConstR2, BBR);
+
+    ASSERT_EQ(DiffComp->testCmpBasicBlocks(BBL, BBR), 1);
     ASSERT_EQ(DiffComp->testCmpValues(CastL, ConstR2), 1);
-    ASSERT_EQ(DiffComp->testCmpValues(ConstR2, CastL), -1);
 }
 
-/// Test the comparison of a truncated integer value with an untruncated one
-/// using cmpValues.
+/// Test ignoring of a truncated integer using cmpBasicBlocks and cmpValues.
 TEST_F(DifferentialFunctionComparatorTest, CmpValuesIntTrunc) {
     BasicBlock *BBL = BasicBlock::Create(CtxL, "", FL);
     BasicBlock *BBR = BasicBlock::Create(CtxR, "", FR);
@@ -1103,17 +1113,24 @@ TEST_F(DifferentialFunctionComparatorTest, CmpValuesIntTrunc) {
     Constant *ConstR = ConstantInt::get(Type::getInt16Ty(CtxR), 0);
     CastInst *CastL = new TruncInst(ConstL, Type::getInt8Ty(CtxL), "", BBL);
 
+    ReturnInst::Create(CtxL, CastL, BBL);
+    ReturnInst::Create(CtxR, ConstR, BBR);
+
+    // First, cmpBasicBlocks must be run to identify instructions to ignore
+    // and then, cmpValues should ignore those instructions.
+    ASSERT_EQ(DiffComp->testCmpBasicBlocks(BBL, BBR), 1);
     ASSERT_EQ(DiffComp->testCmpValues(CastL, ConstR), -1);
-    ASSERT_EQ(DiffComp->testCmpValues(ConstR, CastL), 1);
 
     Conf.ControlFlowOnly = true;
+    ASSERT_EQ(DiffComp->testCmpBasicBlocks(BBL, BBR), 0);
     ASSERT_EQ(DiffComp->testCmpValues(CastL, ConstR), 0);
     ASSERT_EQ(DiffComp->testCmpValues(ConstR, CastL), 0);
     Conf.ControlFlowOnly = false;
 }
 
-/// Test the comparison of a extended integer value with an unextended one
-/// first without artithmetic instructions present, then again with them.
+/// Test ignoring of an extended integer value with an unextended one
+/// first without arithmetic instructions present (the extension should be
+/// ignored), then again with them (the extension should not be ignored).
 TEST_F(DifferentialFunctionComparatorTest, CmpValuesIntExt) {
     BasicBlock *BBL = BasicBlock::Create(CtxL, "", FL);
     BasicBlock *BBR = BasicBlock::Create(CtxR, "", FR);
@@ -1122,15 +1139,28 @@ TEST_F(DifferentialFunctionComparatorTest, CmpValuesIntExt) {
     Constant *ConstR = ConstantInt::get(Type::getInt16Ty(CtxR), 0);
     CastInst *CastL = new SExtInst(ConstL, Type::getInt32Ty(CtxL), "", BBL);
 
-    ASSERT_EQ(DiffComp->testCmpValues(CastL, ConstR), 0);
-    ASSERT_EQ(DiffComp->testCmpValues(ConstR, CastL), 0);
+    auto *RetL = ReturnInst::Create(CtxL, CastL, BBL);
+    auto *RetR = ReturnInst::Create(CtxR, ConstR, BBR);
 
-    CastInst *CastL2 = new SExtInst(CastL, Type::getInt64Ty(CtxL), "", BBL);
+    // First, cmpBasicBlocks must be run to identify instructions to ignore
+    // and then, cmpValues should ignore those instructions.
+    ASSERT_EQ(DiffComp->testCmpBasicBlocks(BBL, BBR), 1);
+    ASSERT_EQ(DiffComp->testCmpValues(CastL, ConstR), 0);
+
+    CastL->eraseFromParent();
+    RetL->eraseFromParent();
+    RetR->eraseFromParent();
+
+    CastInst *CastL2 = new SExtInst(ConstL, Type::getInt64Ty(CtxL), "", BBL);
     BinaryOperator *ArithmL = BinaryOperator::Create(
             Instruction::BinaryOps::Add, CastL2, CastL2, "", BBL);
+    BinaryOperator *ArithmR = BinaryOperator::Create(
+            Instruction::BinaryOps::Add, ConstR, ConstR, "", BBR);
+    ReturnInst::Create(CtxL, ArithmL, BBL);
+    ReturnInst::Create(CtxR, ArithmR, BBR);
 
-    ASSERT_EQ(DiffComp->testCmpValues(CastL, ConstR), -1);
-    ASSERT_EQ(DiffComp->testCmpValues(ConstR, CastL), 1);
+    ASSERT_EQ(DiffComp->testCmpBasicBlocks(BBL, BBR), 1);
+    ASSERT_EQ(DiffComp->testCmpValues(CastL2, ConstR), -1);
 }
 
 /// Tests comparison of constants that were generated from macros.
