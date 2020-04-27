@@ -1186,8 +1186,24 @@ int DifferentialFunctionComparator::cmpOperationsWithOperands(
     // convenient to have the code in a separate function.
 
     bool needToCmpOperands = true;
-    if (int Res = cmpOperations(L, R, needToCmpOperands))
+    if (int Res = cmpOperations(L, R, needToCmpOperands)) {
+        auto *CallL = dyn_cast<CallInst>(L);
+        auto *CallR = dyn_cast<CallInst>(R);
+        if (CallL != CallR) {
+            auto *CalledL = CallL ? getCalledFunction(CallL->getCalledValue())
+                                  : nullptr;
+            auto *CalledR = CallR ? getCalledFunction(CallR->getCalledValue())
+                                  : nullptr;
+            // If just one of the instructions is a call, it is possible that
+            // some logic has been moved into a function. We'll try to inline
+            // that function and compare again.
+            if (CalledL && !isSimpllAbstractionDeclaration(CalledL))
+                ModComparator->tryInline = {CallL, nullptr};
+            else if (CalledR && !isSimpllAbstractionDeclaration(CalledR))
+                ModComparator->tryInline = {nullptr, CallR};
+        }
         return Res;
+    }
     if (needToCmpOperands) {
         assert(L->getNumOperands() == R->getNumOperands());
 
@@ -1228,10 +1244,6 @@ void DifferentialFunctionComparator::findDifference(
     if (isa<CallInst>(&*L) || isa<CallInst>(&*R)) {
         auto *CallL = dyn_cast<CallInst>(&*L);
         auto *CallR = dyn_cast<CallInst>(&*R);
-        auto *CalledL =
-                CallL ? getCalledFunction(CallL->getCalledValue()) : nullptr;
-        auto *CalledR =
-                CallR ? getCalledFunction(CallR->getCalledValue()) : nullptr;
 
         if (CallL && CallR) {
             if (config.PrintAsmDiffs) {
@@ -1242,14 +1254,6 @@ void DifferentialFunctionComparator::findDifference(
 
             processCallInstDifference(CallL, CallR);
         } else {
-            // If just one of the instructions is a call, it is possible that
-            // some logic has been moved into a function. We'll try to inline
-            // that function and compare again.
-            if (CallL && !isSimpllAbstractionDeclaration(CalledL))
-                ModComparator->tryInline = {CallL, nullptr};
-            else if (CallR && !isSimpllAbstractionDeclaration(CalledR))
-                ModComparator->tryInline = {nullptr, CallR};
-
             // Look for a macro-function difference.
             findMacroFunctionDifference(&*L, &*R);
         }
