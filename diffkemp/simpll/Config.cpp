@@ -56,6 +56,13 @@ cl::opt<bool> PrintAsmDiffsOpt(
         "print-asm-diffs",
         cl::desc("Print raw differences in inline assembly code "
                  "(does not apply to macros)."));
+cl::opt<bool> NoMissingDefsInPreprocessOpt(
+        "no-missing-defs-in-preprocess",
+        cl::desc("Don't return missing definitions in preprocess module "
+                 "phase."));
+cl::list<int> IndicesOpt(
+        "var-index",
+        cl::desc("Indices of GEP instruction found in sysctl definiton"));
 
 /// Add suffix to the file name.
 /// \param File Original file name.
@@ -72,7 +79,8 @@ Config::Config()
           Second(parseIRFile(SecondFileOpt, err, context_second)),
           FirstOutFile(FirstFileOpt), SecondOutFile(SecondFileOpt),
           OutputLlvmIR(OutputLlvmIROpt), ControlFlowOnly(ControlFlowOpt),
-          PrintAsmDiffs(PrintAsmDiffsOpt), PrintCallStacks(PrintCallstacksOpt) {
+          PrintAsmDiffs(PrintAsmDiffsOpt), PrintCallStacks(PrintCallstacksOpt),
+          NoMissingDefsInPreprocess(NoMissingDefsInPreprocessOpt) {
     if (!FunctionOpt.empty()) {
         // Parse --fun option - find functions with given names.
         // The option can be either single function name (same for both modules)
@@ -95,6 +103,11 @@ Config::Config()
         // Parse --var option - find global variables with given name.
         FirstVar = First->getGlobalVariable(VariableOpt, true);
         SecondVar = Second->getGlobalVariable(VariableOpt, true);
+    }
+    if (!IndicesOpt.empty()) {
+        for (auto i : IndicesOpt) {
+            Indices.push_back(i);
+        }
     }
     if (!SuffixOpt.empty()) {
         // Parse --suffix option - add suffix to the names of output files.

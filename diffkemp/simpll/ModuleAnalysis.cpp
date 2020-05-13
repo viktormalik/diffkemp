@@ -57,16 +57,25 @@
 void preprocessModule(Module &Mod,
                       Function *Main,
                       GlobalVariable *Var,
-                      bool ControlFlowOnly) {
+                      std::vector<int> Indices,
+                      bool ControlFlowOnly,
+                      bool NoMissingDefsInPreprocess,
+                      OverallResult &Result) {
     if (Var) {
         // Slicing of the program w.r.t. the value of a global variable
-        PassManager<Function, FunctionAnalysisManager, GlobalVariable *> fpm;
+        PassManager<Function,
+                    FunctionAnalysisManager,
+                    GlobalVariable *,
+                    std::vector<int>,
+                    bool,
+                    OverallResult &>
+                fpm;
         FunctionAnalysisManager fam(false);
         PassBuilder pb;
         pb.registerFunctionAnalyses(fam);
 
         fpm.addPass(VarDependencySlicer{});
-        fpm.run(*Main, fam, Var);
+        fpm.run(*Main, fam, Var, Indices, NoMissingDefsInPreprocess, Result);
     }
 
     // Function passes
@@ -233,12 +242,21 @@ void processAndCompare(Config &config, OverallResult &Result) {
     preprocessModule(*config.First,
                      config.FirstFun,
                      config.FirstVar,
-                     config.ControlFlowOnly);
+                     config.Indices,
+                     config.ControlFlowOnly,
+                     config.NoMissingDefsInPreprocess,
+                     Result);
     preprocessModule(*config.Second,
                      config.SecondFun,
                      config.SecondVar,
-                     config.ControlFlowOnly);
+                     config.Indices,
+                     config.ControlFlowOnly,
+                     config.NoMissingDefsInPreprocess,
+                     Result);
     config.refreshFunctions();
+
+    if (!Result.missingDefs.empty())
+        return;
 
     simplifyModulesDiff(config, Result);
 

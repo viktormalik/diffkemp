@@ -15,6 +15,8 @@
 #ifndef DIFFKEMP_SIMPLL_CONFIG_H
 #define DIFFKEMP_SIMPLL_CONFIG_H
 
+#include <vector>
+
 #include "llvm/Support/CommandLine.h"
 #include <llvm/IR/Module.h>
 #include <llvm/IRReader/IRReader.h>
@@ -35,6 +37,8 @@ extern cl::opt<bool> ControlFlowOpt;
 extern cl::opt<bool> PrintCallstacksOpt;
 extern cl::opt<bool> VerboseOpt;
 extern cl::opt<bool> VerboseMacrosOpt;
+extern cl::opt<bool> NoMissingDefsInPreprocessOpt;
+extern cl::list<int> IndicesOpt;
 
 /// Tool configuration parsed from CLI options.
 class Config {
@@ -70,6 +74,11 @@ class Config {
     bool PrintAsmDiffs;
     // Show call stacks for non-equal functions
     bool PrintCallStacks;
+    // Don't print missingDefs in preprocess phase
+    bool NoMissingDefsInPreprocess;
+
+    // Indices for GEP instuction dependency check
+    std::vector<int> Indices;
 
     // Constructor for command-line use.
     Config();

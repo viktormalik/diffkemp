@@ -27,9 +27,10 @@ class Snapshot:
         For sysctl option, glob_var is the data variable that the option sets.
         """
 
-        def __init__(self, mod, glob_var, tag):
+        def __init__(self, mod, glob_var, indices, tag):
             self.mod = mod
             self.glob_var = glob_var
+            self.var_indices = indices
             self.tag = tag
 
     class FunctionGroup:
@@ -117,7 +118,8 @@ class Snapshot:
                                "snapshot.yaml"), "w") as snapshot_yaml:
             snapshot_yaml.write(self.to_yaml())
 
-    def add_fun(self, name, llvm_mod, glob_var=None, tag=None, group=None):
+    def add_fun(self, name, llvm_mod, glob_var=None,
+                var_indices=None, tag=None, group=None):
         """
         Add function to the function list.
         :param name: Name of the function.
@@ -127,6 +129,7 @@ class Snapshot:
         """
         self.fun_groups[group].functions[name] = self.FunctionDesc(llvm_mod,
                                                                    glob_var,
+                                                                   var_indices,
                                                                    tag)
 
     def _add_none_group(self):
@@ -211,7 +214,7 @@ class Snapshot:
                                      self.snapshot_source.kernel_dir),
                                      f["llvm"]))
                              if f["llvm"] else None,
-                             f["glob_var"],
+                             f["glob_var"], f["glob_var_indices"],
                              f["tag"],
                              group)
 
@@ -230,6 +233,7 @@ class Snapshot:
                                         self.snapshot_source.kernel_dir)
                 if fun_desc.mod else None,
                 "glob_var": fun_desc.glob_var,
+                "glob_var_indices": fun_desc.var_indices,
                 "tag": fun_desc.tag
             } for fun_name, fun_desc in g.functions.items()]
         } for group_name, g in self.fun_groups.items()

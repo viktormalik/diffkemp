@@ -249,6 +249,9 @@ class ComparisonGraph:
         if function_name.endswith(".void"):
             self._weak_vertex_cache.append(value)
 
+    def __len__(self):
+        return len(self.vertices)
+
     def __repr__(self):
         return "Graph(vertices: {0}, equal_funs: {1})".format(
             str(self.vertices), str(self.equal_funs)

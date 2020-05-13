@@ -15,9 +15,13 @@
 #ifndef PROJECT_VARDEPENDENCYSLICER_H
 #define PROJECT_VARDEPENDENCYSLICER_H
 
+#include <Result.h>
 #include <llvm/IR/Instructions.h>
+#include <llvm/IR/Operator.h>
 #include <llvm/IR/PassManager.h>
 #include <set>
+#include <utility>
+#include <vector>
 
 using namespace llvm;
 
@@ -30,10 +34,14 @@ class VarDependencySlicer : public PassInfoMixin<VarDependencySlicer> {
   public:
     PreservedAnalyses run(Function &Fun,
                           FunctionAnalysisManager &fam,
-                          GlobalVariable *Var);
+                          GlobalVariable *Var,
+                          std::vector<int> Indices,
+                          bool NoMissingDefsInPreprocess,
+                          OverallResult &Result);
 
   private:
     GlobalVariable *Variable = nullptr;
+    std::vector<int> Indices;
     // Instructions directly dependent on the parameter
     std::set<const Instruction *> DependentInstrs = {};
     // Instructions that must be included
@@ -47,6 +55,10 @@ class VarDependencySlicer : public PassInfoMixin<VarDependencySlicer> {
 
     // Return block
     BasicBlock *RetBB = nullptr;
+
+    // MissingDefs
+    bool dontReturnMissingDef = false;
+    std::vector<GlobalValuePair> MissingDefs;
 
     // Functions for adding to sets
     void addAllInstrs(const std::vector<const BasicBlock *> BBs);
@@ -69,6 +81,9 @@ class VarDependencySlicer : public PassInfoMixin<VarDependencySlicer> {
                                               const BasicBlock *ExitBlock);
 
     bool checkPhiDependency(const PHINode &Phi);
+    bool checkGEPDependency(const GetElementPtrInst *GEPInstr);
+    bool checkGEPDependency(const GEPOperator *GEPInstr);
+    bool checkCallDependency(const CallInst *CallInstr);
 
     // Computing reachable blocks
     std::set<const BasicBlock *> reachableBlocks(const BasicBlock *Src,
@@ -84,6 +99,7 @@ class VarDependencySlicer : public PassInfoMixin<VarDependencySlicer> {
                    const std::set<const BasicBlock *> &other);
 
     bool checkDependency(const Use *Op);
+    std::pair<bool, bool> checkDependencyAndDirectDependency(const Use *Op);
 
     bool canRemoveBlock(const BasicBlock *bb);
     bool canRemoveFirstBlock(const BasicBlock *bb);
@@ -96,6 +112,9 @@ class VarDependencySlicer : public PassInfoMixin<VarDependencySlicer> {
 
     /// Change return type of the function to void if possible.
     void changeToVoid(Function &Fun);
+
+    // Is the first function?
+    static bool first_preprocessing;
 };
 
 #endif // PROJECT_VARDEPENDENCYSLICER_H

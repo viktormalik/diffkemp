@@ -15,6 +15,7 @@
 #include "VarDependencySlicer.h"
 #include "DebugInfo.h"
 #include <Config.h>
+#include <Utils.h>
 #include <llvm/Analysis/CFG.h>
 #include <llvm/IR/CFG.h>
 #include <llvm/IR/Operator.h>
@@ -23,13 +24,20 @@
 #include <llvm/Transforms/Utils/Local.h>
 #include <llvm/Transforms/Utils/UnifyFunctionExitNodes.h>
 
+bool VarDependencySlicer::first_preprocessing = true;
+
 PreservedAnalyses VarDependencySlicer::run(Function &Fun,
                                            FunctionAnalysisManager &fam,
-                                           GlobalVariable *Var) {
+                                           GlobalVariable *Var,
+                                           std::vector<int> Indices,
+                                           bool NoMissingDefsInPreprocess,
+                                           OverallResult &Result) {
     if (Fun.isDeclaration())
         return PreservedAnalyses::all();
 
     Variable = Var;
+    this->Indices = Indices;
+    dontReturnMissingDef = NoMissingDefsInPreprocess;
     // Clear all sets
     DependentInstrs.clear();
     IncludedInstrs.clear();
@@ -46,16 +54,17 @@ PreservedAnalyses VarDependencySlicer::run(Function &Fun,
             continue;
         for (auto &Instr : BB) {
             bool dependent = false;
-            for (auto &Op : Instr.operands()) {
-                if (checkDependency(&Op))
-                    dependent = true;
+            if (auto GEPInstr = dyn_cast<GetElementPtrInst>(&Instr)) {
+                dependent = checkGEPDependency(GEPInstr);
+            } else {
+                for (auto &Op : Instr.operands()) {
+                    if (checkDependency(&Op))
+                        dependent = true;
+                }
             }
             if (auto CallInstr = dyn_cast<CallInst>(&Instr)) {
                 // Call instructions
-                for (auto &Arg : CallInstr->arg_operands()) {
-                    if (checkDependency(&Arg))
-                        dependent = true;
-                }
+                checkCallDependency(CallInstr);
             }
             if (auto PhiInstr = dyn_cast<PHINode>(&Instr)) {
                 // Phi instructions
@@ -65,10 +74,8 @@ PreservedAnalyses VarDependencySlicer::run(Function &Fun,
 
             if (dependent) {
                 addToDependent(&Instr);
-                DEBUG_WITH_TYPE(DEBUG_SIMPLL, {
-                    dbgs() << "Dependent: ";
-                    Instr.print(dbgs());
-                });
+                DEBUG_WITH_TYPE(DEBUG_SIMPLL,
+                                { dbgs() << "Dependent: " << Instr << "\n"; });
                 if (auto BranchInstr = dyn_cast<BranchInst>(&Instr)) {
                     auto affectedBBs = affectedBasicBlocks(BranchInstr);
                     addAllInstrs(affectedBBs);
@@ -81,6 +88,14 @@ PreservedAnalyses VarDependencySlicer::run(Function &Fun,
                 }
             }
         }
+    }
+
+    first_preprocessing = false;
+    if (!MissingDefs.empty()) {
+        Result.missingDefs.insert(Result.missingDefs.end(),
+                                  MissingDefs.begin(),
+                                  MissingDefs.end());
+        return PreservedAnalyses::none();
     }
 
     // Second phase - determine which additional instructions we need to
@@ -161,10 +176,8 @@ PreservedAnalyses VarDependencySlicer::run(Function &Fun,
         // Collect and clear all instruction that can be removed
         for (auto &Inst : BB) {
             if (!isIncluded(&Inst) && !Inst.isTerminator()) {
-                DEBUG_WITH_TYPE(DEBUG_SIMPLL, {
-                    dbgs() << "Clearing ";
-                    Inst.print(dbgs());
-                });
+                DEBUG_WITH_TYPE(DEBUG_SIMPLL,
+                                { dbgs() << "Clearing " << Inst << "\n"; });
                 Inst.replaceAllUsesWith(UndefValue::get(Inst.getType()));
                 toRemove.push_back(&Inst);
             }
@@ -268,10 +281,8 @@ void VarDependencySlicer::addAllInstrs(
         IncludedBasicBlocks.insert(BB);
         for (auto &Instr : *BB) {
             DependentInstrs.insert(&Instr);
-            DEBUG_WITH_TYPE(DEBUG_SIMPLL, {
-                dbgs() << "Dependent: ";
-                Instr.print(dbgs());
-            });
+            DEBUG_WITH_TYPE(DEBUG_SIMPLL,
+                            { dbgs() << "Dependent: " << Instr << "\n"; });
         }
     }
 }
@@ -280,19 +291,106 @@ void VarDependencySlicer::addAllInstrs(
 /// A value is dependent on a variable if it is the variable itself or if it is
 /// a dependent value.
 bool VarDependencySlicer::checkDependency(const Use *Op) {
-    bool result = false;
+    return checkDependencyAndDirectDependency(Op).first;
+}
+
+std::pair<bool, bool>
+        VarDependencySlicer::checkDependencyAndDirectDependency(const Use *Op) {
+    bool dependent = false;
+    bool directly = false;
     if (dyn_cast<GlobalVariable>(Op) == Variable) {
-        result = true;
+        dependent = true;
+        directly = true;
+    } else if (auto GEPOp = dyn_cast<GEPOperator>(Op)) {
+        dependent = checkGEPDependency(GEPOp);
     } else if (auto OpInst = dyn_cast<Instruction>(Op)) {
         if (isDependent(OpInst)) {
-            result = true;
+            dependent = true;
         }
     } else if (auto OpOperator = dyn_cast<Operator>(Op)) {
         for (auto &InnerOp : OpOperator->operands())
             if (checkDependency(&InnerOp))
-                result = true;
+                dependent = true;
     }
-    return result;
+    return std::make_pair(dependent, directly);
+}
+
+bool VarDependencySlicer::checkGEPDependency(
+        const GetElementPtrInst *GEPInstr) {
+    if (auto GEPOp = dyn_cast<GEPOperator>(GEPInstr))
+        return checkGEPDependency(GEPOp);
+    return true;
+}
+
+bool VarDependencySlicer::checkGEPDependency(const GEPOperator *GEPInstr) {
+    bool dependent = false;
+    if (dyn_cast<GlobalVariable>(GEPInstr->getOperand(0)) == Variable) {
+        if (GEPInstr->hasAllConstantIndices()) {
+            std::vector<int> gep_indicies;
+            for (int i = 1; i < GEPInstr->getNumIndices(); i++) {
+                ConstantInt *CI =
+                        dyn_cast<ConstantInt>(GEPInstr->getOperand(i));
+                gep_indicies.push_back(CI->getZExtValue());
+            }
+            if (Indices == gep_indicies)
+                dependent = true;
+            else {
+                gep_indicies.clear();
+                APInt InstOffset(64, 0);
+                GEPInstr->accumulateConstantOffset(
+                        Variable->getParent()->getDataLayout(), InstOffset);
+                if (Indices[0] == InstOffset.getZExtValue()) {
+                    dependent = true;
+                }
+            }
+        } else
+            dependent = true;
+    }
+    return dependent;
+}
+
+bool VarDependencySlicer::checkCallDependency(const CallInst *CallInstr) {
+    for (auto &Arg : CallInstr->arg_operands()) {
+        auto dependency_info = checkDependencyAndDirectDependency(&Arg);
+        if (dependency_info.first) {
+            if (dependency_info.second && !Indices.empty()) {
+                auto calledFunction =
+                        getCalledFunction(CallInstr->getCalledValue());
+                if (calledFunction->isDeclaration()) {
+                    if (!dontReturnMissingDef) {
+                        if (first_preprocessing)
+                            MissingDefs.push_back({calledFunction, nullptr});
+                        else
+                            MissingDefs.push_back({nullptr, calledFunction});
+                    }
+                    return true;
+                }
+
+                for (auto &BB : *calledFunction) {
+                    for (auto &Instr : BB) {
+                        if (auto GEPInstr =
+                                    dyn_cast<GetElementPtrInst>(&Instr)) {
+                            if (checkGEPDependency(GEPInstr))
+                                return true;
+                        } else {
+                            for (auto &Op : Instr.operands()) {
+                                if (auto GEPOp = dyn_cast<GEPOperator>(Op)) {
+                                    if (checkGEPDependency(GEPOp))
+                                        return true;
+                                }
+                            }
+                        }
+
+                        if (auto CallInstr = dyn_cast<CallInst>(&Instr)) {
+                            checkCallDependency(CallInstr);
+                        }
+                    }
+                }
+            } else
+                return true;
+        }
+    }
+    return false;
 }
 
 /// Add instruction to dependent instructions.
@@ -329,10 +427,8 @@ bool VarDependencySlicer::addAllOpsToIncluded(const Instruction *Inst) {
     for (auto &Op : Inst->operands()) {
         if (auto OpInst = dyn_cast<Instruction>(&Op)) {
             if (addToIncluded(OpInst)) {
-                DEBUG_WITH_TYPE(DEBUG_SIMPLL, {
-                    dbgs() << "Included: ";
-                    OpInst->print(dbgs());
-                });
+                DEBUG_WITH_TYPE(DEBUG_SIMPLL,
+                                { dbgs() << "Included: " << *OpInst << "\n"; });
                 added = true;
                 addAllOpsToIncluded(OpInst);
             }
