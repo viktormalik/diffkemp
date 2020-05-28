@@ -1,10 +1,10 @@
 """
-Kernel module containing definitions of sysctl options compiled into LLVM IR.
-Contains reference to LlvmKernelModule and additional sysctl-specific fields
+LLVM module containing definitions of kernel sysctl options compiled into
+LLVM IR. Contains reference to LlvmModule and additional sysctl-specific fields
 and methods.
 """
 from llvmcpy.llvm import *
-from diffkemp.llvm_ir.kernel_module import KernelParam
+from diffkemp.llvm_ir.llvm_module import LlvmParam
 
 
 def matches(name, pattern):
@@ -134,7 +134,7 @@ class LlvmSysctlModule:
 
         if data.get_kind() == GlobalVariableValueKind:
             data = data.get_name().decode("utf-8")
-            return KernelParam(data, indices)
+            return LlvmParam(data, indices)
         return None
 
     def get_proc_fun(self, sysctl_name):

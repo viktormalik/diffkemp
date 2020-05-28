@@ -3,7 +3,8 @@ Unit tests for testing function syntax diff.
 """
 
 from diffkemp.config import Config
-from diffkemp.llvm_ir.kernel_source import KernelSource
+from diffkemp.llvm_ir.source_tree import SourceTree
+from diffkemp.llvm_ir.kernel_llvm_source_builder import KernelLlvmSourceBuilder
 from diffkemp.semdiff.module_diff import functions_diff
 
 
@@ -16,8 +17,10 @@ def test_syntax_diff():
             '\tif (dio->end_io)\n! \t\tdio->end_io(dio->iocb, offset, ret, dio'
             '->private, 0, 0);\n  \n')
 
-    source_first = KernelSource("kernel/linux-3.10.0-862.el7", True)
-    source_second = KernelSource("kernel/linux-3.10.0-957.el7", True)
+    source_first = SourceTree("kernel/linux-3.10.0-862.el7",
+                              KernelLlvmSourceBuilder)
+    source_second = SourceTree("kernel/linux-3.10.0-957.el7",
+                               KernelLlvmSourceBuilder)
     config = Config(source_first, source_second, show_diff=True,
                     output_llvm_ir=False, control_flow_only=True,
                     print_asm_diffs=False, verbosity=False, use_ffi=False,

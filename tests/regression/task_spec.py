@@ -4,7 +4,8 @@ import os
 import shutil
 
 from diffkemp.config import Config
-from diffkemp.llvm_ir.kernel_source import KernelSource
+from diffkemp.llvm_ir.kernel_llvm_source_builder import KernelLlvmSourceBuilder
+from diffkemp.llvm_ir.kernel_source_tree import KernelSourceTree
 from diffkemp.semdiff.result import Result
 from diffkemp.snapshot import Snapshot
 
@@ -45,8 +46,10 @@ class TaskSpec:
             self.control_flow_only = False
 
         # Create LLVM sources and configuration
-        self.old_kernel = KernelSource(self.old_kernel_dir, True)
-        self.new_kernel = KernelSource(self.new_kernel_dir, True)
+        self.old_kernel = KernelSourceTree(self.old_kernel_dir,
+                                           KernelLlvmSourceBuilder)
+        self.new_kernel = KernelSourceTree(self.new_kernel_dir,
+                                           KernelLlvmSourceBuilder)
         self.old_snapshot = Snapshot(self.old_kernel, self.old_kernel)
         self.new_snapshot = Snapshot(self.new_kernel, self.new_kernel)
         self.config = Config(self.old_snapshot, self.new_snapshot, False,
@@ -71,7 +74,7 @@ class TaskSpec:
         Build LLVM modules containing definition of the compared function in
         both kernels.
         """
-        # Since PyTest may share KernelSource objects among tasks, we need
+        # Since PyTest may share KernelSourceTree objects among tasks, we need
         # to explicitly initialize kernels.
         self.old_kernel.initialize()
         self.new_kernel.initialize()
@@ -107,9 +110,9 @@ class TaskSpec:
     def prepare_dir(self, old_module, new_module, old_src, new_src, name=None):
         """
         Create the task directory and copy the LLVM and the C files there.
-        :param old_module: Old LLVM module (instance of LlvmKernelModule).
+        :param old_module: Old LLVM module (instance of LlvmModule).
         :param old_src: C source from the old kernel version to be copied.
-        :param new_module: New LLVM module (instance of LlvmKernelModule).
+        :param new_module: New LLVM module (instance of LlvmModule).
         :param new_src: C source from the new kernel version to be copied.
         :param name: Optional parameter to specify the new file names. If None
                      then the spec name is used.
@@ -176,10 +179,8 @@ class ModuleParamSpec(TaskSpec):
 
     def build_module(self):
         """Build the compared kernel modules into LLVM."""
-        self.old_module = self.old_kernel.get_module_for_kernel_mod(self.dir,
-                                                                    self.mod)
-        self.new_module = self.new_kernel.get_module_for_kernel_mod(self.dir,
-                                                                    self.mod)
+        self.old_module = self.old_kernel.get_kernel_module(self.dir, self.mod)
+        self.new_module = self.new_kernel.get_kernel_module(self.dir, self.mod)
 
     def get_param(self):
         """Get the name of the global variable representing the parameter."""

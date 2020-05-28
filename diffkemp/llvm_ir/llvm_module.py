@@ -1,6 +1,6 @@
 """
-Kernel modules in LLVM IR.
-Functions for working with parameters of modules.
+LLVM IR modules.
+Functions for working with modules and parameters in them.
 """
 
 from llvmcpy.llvm import *
@@ -15,7 +15,7 @@ supported_prefixes = ["llvm.lifetime", "kmalloc", "kzalloc", "malloc",
                       "calloc", "__kmalloc", "devm_kzalloc"]
 
 
-def supported_kernel_fun(llvm_fun):
+def supported_fun(llvm_fun):
     """Check whether the function is supported."""
     name = llvm_fun.get_name().decode("utf-8")
     if name:
@@ -23,15 +23,12 @@ def supported_kernel_fun(llvm_fun):
                 any([name.startswith(p) for p in supported_prefixes]))
 
 
-class KernelModuleException(Exception):
-    pass
-
-
-class KernelParam:
+class LlvmParam:
     """
-    Kernel parameter.
-    Contains name and optionally a list of indices in case the parameter is
-    a member of a composite data type.
+    A parameter represented by a (global) variable and an optional list of
+    field indices in case the parameter is a member of a composite data type.
+    The indices correspond to the indices used in LLVM GEP instruction to get
+    the address of the particular element within the given variable.
     """
     def __init__(self, name, indices=None):
         self.name = name
@@ -41,9 +38,9 @@ class KernelParam:
         return self.name
 
 
-class LlvmKernelModule:
+class LlvmModule:
     """
-    Kernel module in LLVM IR
+    Representation of a module in LLVM IR
     """
     def __init__(self, llvm_file, source_file=None):
         self.llvm = llvm_file
@@ -150,7 +147,7 @@ class LlvmKernelModule:
         if var_union.get_num_operands() == 1:
             # Last element should be a struct with single element, get it
             var = var_union.get_operand(0)
-            return KernelParam(self._extract_param_name(var), [])
+            return LlvmParam(self._extract_param_name(var), [])
         return None
 
     def has_function(self, fun):
@@ -190,9 +187,9 @@ class LlvmKernelModule:
 
     def move_to_other_root_dir(self, old_root, new_root):
         """
-        Move this LLVM module into a different kernel root directory.
-        :param old_root: Kernel root directory to move from.
-        :param new_root: Kernel root directory to move to.
+        Move this LLVM module into a different project root directory.
+        :param old_root: Project root directory to move from.
+        :param new_root: Project root directory to move to.
         :return:
         """
         if self.llvm.startswith(old_root):
@@ -312,11 +309,11 @@ class LlvmKernelModule:
                     # Collect all unsupported functions that are called
                     if (called.get_kind() == FunctionValueKind and
                             called_name and
-                            not supported_kernel_fun(called) and
+                            not supported_fun(called) and
                             called_name not in result):
                         result.add(called_name)
                         # Recursively call the method on the called function
-                        LlvmKernelModule._get_functions_called_by_rec(
+                        LlvmModule._get_functions_called_by_rec(
                             called, result)
 
                 # Collect also functions that are passed as parameters to
@@ -328,7 +325,7 @@ class LlvmKernelModule:
                     op_name = op.get_name().decode("utf-8")
                     if (op.get_kind() == FunctionValueKind and
                             op_name and
-                            not supported_kernel_fun(op) and
+                            not supported_fun(op) and
                             op_name not in result):
                         result.add(op_name)
 

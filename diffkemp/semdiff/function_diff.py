@@ -1,5 +1,5 @@
 """Semantic difference of two functions using llreve and Z3 SMT solver."""
-from diffkemp.llvm_ir.kernel_source import SourceNotFoundException
+from diffkemp.llvm_ir.source_tree import SourceNotFoundException
 from diffkemp.simpll.simpll import run_simpll, SimpLLException
 from diffkemp.semdiff.result import Result
 from diffkemp.syndiff.function_syntax_diff import syntax_diff
@@ -17,7 +17,7 @@ def _kill(processes):
 def _link_symbol_def(snapshot, module, symbol):
     """
     Try to find and link a missing symbol definition inside the given snapshot.
-    Look inside the kernel directory if no definition is found inside the
+    Look inside the source directory if no definition is found inside the
     primary snapshot directory. The search is skipped when a source file
     change after the snapshot creation time is detected.
     :param snapshot: Snapshot where the definition should be.
@@ -30,12 +30,12 @@ def _link_symbol_def(snapshot, module, symbol):
     time = snapshot.created_time.timestamp() if snapshot.created_time else None
 
     try:
-        new_mod = snapshot.snapshot_source.get_module_for_symbol(symbol, time)
+        new_mod = snapshot.snapshot_tree.get_module_for_symbol(symbol, time)
     except SourceNotFoundException:
-        if snapshot.kernel_source:
+        if snapshot.source_tree:
             try:
-                new_mod = snapshot.kernel_source.get_module_for_symbol(symbol,
-                                                                       time)
+                new_mod = snapshot.source_tree.get_module_for_symbol(symbol,
+                                                                     time)
             except SourceNotFoundException:
                 pass
 

@@ -1,10 +1,10 @@
 """
-Comparing two kernel modules in LLVM IR for semantic equivalence w.r.t. some
+Comparing two modules in LLVM IR for semantic equivalence w.r.t. some
 global variable (parameter of modules). Each pair of corresponding functions
 using the given parameter is compared individually.
 """
 
-from diffkemp.llvm_ir.build_llvm import BuildException
+from diffkemp.llvm_ir.kernel_llvm_source_builder import BuildException
 from diffkemp.semdiff.function_diff import functions_diff
 from diffkemp.semdiff.result import Result
 
