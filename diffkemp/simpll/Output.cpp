@@ -92,6 +92,7 @@ template <> struct MappingTraits<Result> {
         io.mapRequired("result", result.kind);
         io.mapRequired("first", result.First);
         io.mapRequired("second", result.Second);
+        io.mapRequired("analysed-loc", result.linesCnt);
         io.mapOptional("differing-objects", result.DifferingObjects);
     }
 };

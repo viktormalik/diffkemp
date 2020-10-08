@@ -665,3 +665,23 @@ std::string expandMacros(std::vector<std::string> macros,
     }
     return Output;
 }
+
+unsigned countLoc(const Function &Fun)
+{
+    if (auto subprogram = Fun.getSubprogram()) {
+        unsigned startLine = subprogram->getLine();
+        unsigned endLine = 0;
+
+        for (const auto &BB : Fun) {
+            for (const auto &Instr : BB) {
+                if (auto &debugLoc = Instr.getDebugLoc()) {
+                    unsigned line = debugLoc->getLine();
+                    if (line > endLine)
+                        endLine = line;
+                }
+            }
+        }
+        return endLine != 0 ? (endLine - startLine + 1) : 0;
+    }
+    return 0;
+}

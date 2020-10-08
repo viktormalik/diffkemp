@@ -102,6 +102,9 @@ void ModuleComparator::compareFunctions(Function *FirstFun,
     DifferentialFunctionComparator fComp(FirstFun, SecondFun, config, DI, this);
     int result = fComp.compare();
 
+    ComparedFuns.at({FirstFun, SecondFun}).linesCnt =
+            countLoc(*FirstFun) + countLoc(*SecondFun);
+
     DEBUG_WITH_TYPE(DEBUG_SIMPLL, decreaseDebugIndentLevel());
     if (result == 0) {
         DEBUG_WITH_TYPE(DEBUG_SIMPLL,
@@ -161,7 +164,11 @@ void ModuleComparator::compareFunctions(Function *FirstFun,
                 } else {
                     InlineFunctionInfo ifi;
                     if (InlineFunction(inlineFirst, ifi, nullptr, false))
+                    {
                         inlined = true;
+                        ComparedFuns.at({FirstFun, SecondFun}).linesCnt +=
+                                countLoc(*InlinedFunFirst);
+                    }
                 }
             }
             if (inlineSecond) {
@@ -181,7 +188,11 @@ void ModuleComparator::compareFunctions(Function *FirstFun,
                 } else {
                     InlineFunctionInfo ifi;
                     if (InlineFunction(inlineSecond, ifi, nullptr, false))
+                    {
                         inlined = true;
+                        ComparedFuns.at({FirstFun, SecondFun}).linesCnt +=
+                                countLoc(*InlinedFunSecond);
+                    }
                 }
             }
             // If some function to be inlined does not have a declaration,

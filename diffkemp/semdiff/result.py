@@ -183,8 +183,16 @@ class Result:
         print("Empty diffs:             {0} ({1:.0f}%)".format(empty,
               empty / total * 100))
 
+    def report_lines_stat(self):
+        loc = 0
+        for v in self.graph.vertices.values():
+            loc += v.lines_cnt
+        print("Total LOC compared: {}".format(loc))
+
     def report_stat(self, show_errors=False):
         """Reports all statistics."""
         self.report_symbol_stat(show_errors)
         print("")
         self.report_object_stat()
+        print("")
+        self.report_lines_stat()

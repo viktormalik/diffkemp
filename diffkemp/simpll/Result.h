@@ -145,6 +145,8 @@ class Result {
     FunctionInfo First;
     FunctionInfo Second;
 
+    unsigned linesCnt = 0;
+
     std::vector<std::unique_ptr<NonFunctionDifference>> DifferingObjects;
 
     // Default constructor needed for YAML serialisation.

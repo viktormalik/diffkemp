@@ -136,4 +136,7 @@ std::string expandMacros(std::vector<std::string> macros,
                          std::vector<std::string> bodies,
                          std::string Input);
 
+/// Get number of lines of code of a function
+unsigned countLoc(const Function &Fun);
+
 #endif // DIFFKEMP_SIMPLL_SOURCE_CODE_UTILS_H
