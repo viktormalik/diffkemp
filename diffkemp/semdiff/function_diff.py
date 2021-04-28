@@ -212,6 +212,7 @@ def functions_diff(mod_first, mod_second,
                                suffix=glob_var.name if glob_var else "simpl",
                                cache_dir=function_cache.directory
                                if function_cache else None,
+                               pattern_config=config.pattern_config,
                                control_flow_only=config.control_flow_only,
                                output_llvm_ir=config.output_llvm_ir,
                                print_asm_diffs=config.print_asm_diffs,

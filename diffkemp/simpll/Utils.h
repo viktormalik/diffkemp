@@ -145,6 +145,10 @@ void copyCallInstProperties(CallInst *srcCall, CallInst *destCall);
 /// Copies properties from one function to another.
 void copyFunctionProperties(Function *srcFun, Function *destFun);
 
+/// Tests whether two names of types or globals match. Names match if they
+/// are the same or if the DiffKemp pattern name prefixes are used.
+bool namesMatch(const StringRef &L, const StringRef &R, bool IsLeftSide);
+
 /// Converts value to its string representation.
 /// Note: Currently the only place that calls this is returns.gdb, which lacks
 /// the ability to directly dump values because GDB can't call the corresponding

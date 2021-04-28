@@ -17,6 +17,7 @@
 
 #include "Config.h"
 #include "DebugInfo.h"
+#include "PatternSet.h"
 #include "Result.h"
 #include "ResultsCache.h"
 #include "SourceCodeUtils.h"
@@ -54,6 +55,9 @@ class ModuleComparator {
     /// data passed from DiffKemp.
     ResultsCache ResCache;
 
+    /// Set of valid difference patterns for ignoring known code fragments.
+    PatternSet Patterns;
+
     /// Analysis of differences in macros
     MacroDiffAnalysis MacroDiffs;
 
@@ -66,9 +70,10 @@ class ModuleComparator {
                      StructureDebugInfoAnalysis::Result &StructDIMapL,
                      StructureDebugInfoAnalysis::Result &StructDIMapR)
             : First(First), Second(Second), config(config), DI(DI),
-              ResCache(config.CacheDir), MacroDiffs(),
-              StructSizeMapL(StructSizeMapL), StructSizeMapR(StructSizeMapR),
-              StructDIMapL(StructDIMapL), StructDIMapR(StructDIMapR) {}
+              ResCache(config.CacheDir), Patterns(config.PatternConfigPath),
+              MacroDiffs(), StructSizeMapL(StructSizeMapL),
+              StructSizeMapR(StructSizeMapR), StructDIMapL(StructDIMapL),
+              StructDIMapR(StructDIMapR) {}
 
     /// Syntactically compare two functions.
     /// The result of the comparison is stored into the ComparedFuns map.

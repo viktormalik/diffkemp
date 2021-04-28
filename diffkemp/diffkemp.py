@@ -4,6 +4,7 @@ from diffkemp.snapshot import Snapshot
 from diffkemp.llvm_ir.kernel_module import KernelParam, LlvmKernelModule
 from diffkemp.llvm_ir.kernel_source import SourceNotFoundException
 from diffkemp.semdiff.caching import SimpLLCache
+from diffkemp.semdiff.pattern_config import PatternConfig
 from diffkemp.semdiff.function_diff import functions_diff
 from diffkemp.semdiff.result import Result
 from diffkemp.simpll.library import SimpLLModule
@@ -65,6 +66,8 @@ def __make_argument_parser():
                             help="specify root dirs for the compared kernels")
     compare_ap.add_argument("--function", "-f",
                             help="compare only selected function")
+    compare_ap.add_argument("--pattern-file", "-p",
+                            help="difference pattern file or configuration")
     compare_ap.add_argument("--output-llvm-ir",
                             help="output each simplified module to a file",
                             action="store_true")
@@ -127,7 +130,7 @@ def generate(args):
                 #  - find and compile proc handler function and add it to the
                 #    snapshot
                 #  - find sysctl data variable
-                #  - find, complile, and add to snapshot all functions that
+                #  - find, compile, and add to snapshot all functions that
                 #    use the data variable
 
                 # Get module with sysctl definitions
@@ -268,9 +271,16 @@ def compare(args):
         old_snapshot.filter([args.function])
         new_snapshot.filter([args.function])
 
+    # Transform difference pattern files into an LLVM IR based configuration.
+    if args.pattern_file:
+        pattern_config = PatternConfig.create_from_file(args.pattern_file)
+    else:
+        pattern_config = None
+
     config = Config(old_snapshot, new_snapshot, args.show_diff,
-                    args.output_llvm_ir, args.control_flow_only,
-                    args.print_asm_diffs, args.verbose, args.enable_simpll_ffi,
+                    args.output_llvm_ir, pattern_config,
+                    args.control_flow_only, args.print_asm_diffs,
+                    args.verbose, args.enable_simpll_ffi,
                     args.semdiff_tool)
     result = Result(Result.Kind.NONE, args.snapshot_dir_old,
                     args.snapshot_dir_old, start_time=default_timer())

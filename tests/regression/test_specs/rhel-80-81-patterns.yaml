@@ -1,0 +1,22 @@
+old_kernel: kernel/linux-4.18.0-80.el8
+new_kernel: kernel/linux-4.18.0-147.el8
+
+pattern_config: rhel-80-81-config.yaml
+
+functions:
+  ipmi_set_gets_events: equal_syntax
+  vfree: equal_syntax
+
+syntax_diffs:
+  - function: scnprintf
+    diff_symbol: NR_PAGEFLAGS
+    result: equal_syntax
+  - function: set_user_nice
+    diff_symbol: dequeue_task
+    result: equal_syntax
+  - function: set_user_nice
+    diff_symbol: enqueue_task
+    result: equal_syntax
+  - function: zap_vma_ptes
+    diff_symbol: SWP_OFFSET_MASK
+    result: equal_syntax

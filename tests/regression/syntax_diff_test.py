@@ -5,7 +5,8 @@ This module runs tests for syntax differences using the "syntax_diffs" key in
 the YAML spec file.
 """
 from diffkemp.semdiff.function_diff import functions_diff
-from .task_spec import SyntaxDiffSpec, specs_path, tasks_path
+from diffkemp.semdiff.result import Result
+from .task_spec import SyntaxDiffSpec, patterns_path, specs_path, tasks_path
 import glob
 import os
 import pytest
@@ -35,13 +36,24 @@ def collect_task_specs():
                             spec=spec_yaml,
                             task_name=syntax_diff["diff_symbol"],
                             tasks_path=tasks_path,
-                            kernel_path=cwd)
+                            kernel_path=cwd,
+                            patterns_path=patterns_path)
 
                         spec.add_function_spec(syntax_diff["function"],
                                                "not_equal")
-                        spec.add_syntax_diff_spec(syntax_diff["diff_symbol"],
-                                                  syntax_diff["def_old"],
-                                                  syntax_diff["def_new"])
+
+                        if ("result" in syntax_diff
+                                and Result.Kind[syntax_diff["result"].upper()]
+                                == Result.Kind.EQUAL_SYNTAX):
+                            spec.add_equal_diff_spec(
+                                syntax_diff["diff_symbol"]
+                            )
+                        else:
+                            spec.add_syntax_diff_spec(
+                                syntax_diff["diff_symbol"],
+                                syntax_diff["def_old"],
+                                syntax_diff["def_new"]
+                            )
 
                         spec_id = "{}_{}".format(spec_file_name,
                                                  syntax_diff["diff_symbol"])
@@ -88,6 +100,10 @@ def test_syntax_diff(task_spec):
             fun_first=fun_spec.name, fun_second=fun_spec.name,
             glob_var=None, config=task_spec.config)
         assert result.kind == fun_spec.result
+
+        # Ensure that equal diffs are not present
+        for symbol in task_spec.equal_diffs:
+            assert symbol not in result.inner.keys()
 
         for symbol, symbol_result in result.inner.items():
             if symbol in task_spec.syntax_diffs:

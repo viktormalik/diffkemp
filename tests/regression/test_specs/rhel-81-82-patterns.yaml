@@ -1,0 +1,24 @@
+old_kernel: kernel/linux-4.18.0-147.el8
+new_kernel: kernel/linux-4.18.0-193.el8
+
+pattern_config: rhel-81-82-config.yaml
+
+functions:
+  __stack_chk_fail: equal_syntax
+  blk_mq_end_request: equal_syntax
+  down_read: equal_syntax
+
+syntax_diffs:
+  - function: __alloc_pages_nodemask
+    diff_symbol: zone_allows_reclaim
+    result: equal_syntax
+  - function: __put_task_struct
+    diff_symbol: __mmdrop
+    def_old: >
+      *************** void __mmdrop(struct mm_struct *mm)
+      *** 676,678 ***
+          destroy_context(mm);
+      -   hmm_mm_destroy(mm);
+          mmu_notifier_mm_destroy(mm);
+    def_new: >
+      --- 676,677 ---

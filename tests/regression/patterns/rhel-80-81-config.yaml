@@ -1,0 +1,7 @@
+on_parse_failure: ERROR
+patterns:
+ - tests/regression/patterns/llvm/rhel-80-81/ipmi_set_gets_events.ll
+ - tests/regression/patterns/llvm/rhel-80-81/scnprintf.ll
+ - tests/regression/patterns/llvm/rhel-80-81/set_user_nice.ll
+ - tests/regression/patterns/llvm/rhel-80-81/vfree.ll
+ - tests/regression/patterns/llvm/rhel-80-81/zap_vma_ptes.ll

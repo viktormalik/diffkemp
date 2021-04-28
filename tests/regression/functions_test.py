@@ -6,7 +6,7 @@ key in the YAML spec file.
 """
 from diffkemp.semdiff.function_diff import functions_diff
 from diffkemp.semdiff.result import Result
-from .task_spec import TaskSpec, specs_path, tasks_path
+from .task_spec import TaskSpec, patterns_path, specs_path, tasks_path
 import glob
 import os
 import pytest
@@ -35,7 +35,8 @@ def collect_task_specs():
                             spec=spec_yaml,
                             task_name=fun,
                             tasks_path=tasks_path,
-                            kernel_path=cwd)
+                            kernel_path=cwd,
+                            patterns_path=patterns_path)
 
                         spec.add_function_spec(fun, res)
 

@@ -31,6 +31,7 @@ extern cl::opt<std::string> SecondFileOpt;
 extern cl::opt<std::string> FunctionOpt;
 extern cl::opt<std::string> VariableOpt;
 extern cl::opt<std::string> SuffixOpt;
+extern cl::opt<std::string> PatternConfigOpt;
 extern cl::opt<bool> ControlFlowOpt;
 extern cl::opt<bool> PrintCallstacksOpt;
 extern cl::opt<bool> VerboseOpt;
@@ -61,6 +62,8 @@ class Config {
     std::string SecondOutFile;
     // Cache file directory.
     std::string CacheDir;
+    // Path to LLVM IR pattern configuration.
+    std::string PatternConfigPath;
 
     // Save the simplified IR of the module to a file.
     bool OutputLlvmIR;
@@ -81,6 +84,7 @@ class Config {
            std::string FirstOutFile,
            std::string SecondOutFile,
            std::string CacheDir,
+           std::string PatternConfigPath,
            std::string Variable = "",
            bool OutputLlvmIR = false,
            bool ControlFlowOnly = false,
@@ -92,12 +96,14 @@ class Config {
     Config(std::string FirstFunName,
            std::string SecondFunName,
            std::string CacheDir,
+           std::string PatternConfigPath,
            bool ControlFlowOnly = false,
            bool PrintAsmDiffs = true,
            bool PrintCallStacks = true)
             : First(nullptr), Second(nullptr), FirstFunName(FirstFunName),
               SecondFunName(SecondFunName), FirstOutFile("/dev/null"),
               SecondOutFile("/dev/null"), CacheDir(CacheDir),
+              PatternConfigPath(PatternConfigPath),
               ControlFlowOnly(ControlFlowOnly), PrintAsmDiffs(PrintAsmDiffs),
               PrintCallStacks(PrintCallStacks) {}
 

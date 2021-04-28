@@ -1,0 +1,7 @@
+on_parse_failure: ERROR
+patterns:
+ - tests/regression/patterns/llvm/rhel-81-82/__alloc_pages_nodemask.ll
+ - tests/regression/patterns/llvm/rhel-81-82/__put_task_struct.ll
+ - tests/regression/patterns/llvm/rhel-81-82/__stack_chk_fail.ll
+ - tests/regression/patterns/llvm/rhel-81-82/blk_mq_end_request.ll
+ - tests/regression/patterns/llvm/rhel-81-82/down_read.ll
