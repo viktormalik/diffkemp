@@ -15,6 +15,7 @@
 #include "ModuleComparator.h"
 #include "Config.h"
 #include "DifferentialFunctionComparator.h"
+#include "EquivalenceSlicer.h"
 #include "Utils.h"
 #include "passes/FunctionAbstractionsGenerator.h"
 #include <llvm/Support/raw_ostream.h>
@@ -111,7 +112,8 @@ void ModuleComparator::compareFunctions(Function *FirstFun,
                         dbgs() << getDebugIndent()
                                << "Functions are not equal\n");
         ComparedFuns.at({FirstFun, SecondFun}).kind = Result::NOT_EQUAL;
-        while (tryInline.first || tryInline.second) {
+
+        while (!EquivalenceSlicerOpt && (tryInline.first || tryInline.second)) {
             DEBUG_WITH_TYPE(DEBUG_SIMPLL, increaseDebugIndentLevel());
 
             // Try to inline the problematic function calls
@@ -212,6 +214,20 @@ void ModuleComparator::compareFunctions(Function *FirstFun,
                                        << "the functions are not equal\n");
                 ComparedFuns.at({FirstFun, SecondFun}).kind = Result::NOT_EQUAL;
             }
+        }
+        if (EquivalenceSlicerOpt && EqSlicerEnabled
+            && config.FirstFun->getName().str() == FirstFun->getName().str()
+            && ComparedFuns.at({FirstFun, SecondFun}).kind
+                       == Result::NOT_EQUAL) {
+            // Equivalence slicing is done only when it is given in options,
+            // it is enabled by parameter EqSlicerEnabled to prevent slicing of
+            // called functions during the slicing, the currently slicing
+            // function is the given one by opt, and of course the functions
+            // are not equal
+            EqSlicerEnabled = false;
+            EquivalenceSlicer slicer(config);
+            slicer.slice(&fComp);
+            EqSlicerEnabled = true;
         }
     }
 }

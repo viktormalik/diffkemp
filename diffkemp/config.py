@@ -9,7 +9,7 @@ class ConfigException(Exception):
 class Config:
     def __init__(self, snapshot_first, snapshot_second, show_diff,
                  output_llvm_ir, control_flow_only, print_asm_diffs,
-                 verbosity, use_ffi, semdiff_tool):
+                 verbosity, use_ffi, semdiff_tool, equivalence_slicer):
         """
         Store configuration of DiffKemp
         :param snapshot_first: First snapshot representation.
@@ -18,6 +18,7 @@ class Config:
         :param control_flow_only: Check only for control-flow differences.
         :param verbosity: Verbosity level (currently boolean).
         :param semdiff_tool: Tool to use for semantic diff
+        :param equivalence_slicer: Remove equivalent parts of functions.
         """
         self.snapshot_first = snapshot_first
         self.snapshot_second = snapshot_second
@@ -27,6 +28,7 @@ class Config:
         self.print_asm_diffs = print_asm_diffs
         self.verbosity = verbosity
         self.use_ffi = use_ffi
+        self.equivalence_slicer = equivalence_slicer
 
         # Semantic diff tool configuration
         self.semdiff_tool = semdiff_tool

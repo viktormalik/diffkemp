@@ -90,6 +90,10 @@ def __make_argument_parser():
                             uses them in SimpLL (experimental, currently \
                             slower in most cases)",
                             action="store_true")
+    compare_ap.add_argument("--equivalence-slicer",
+                            help="removes equivalent parts of compared \
+                            functions",
+                            action="store_true")
     compare_ap.set_defaults(func=compare)
     return ap
 
@@ -271,7 +275,7 @@ def compare(args):
     config = Config(old_snapshot, new_snapshot, args.show_diff,
                     args.output_llvm_ir, args.control_flow_only,
                     args.print_asm_diffs, args.verbose, args.enable_simpll_ffi,
-                    args.semdiff_tool)
+                    args.semdiff_tool, args.equivalence_slicer)
     result = Result(Result.Kind.NONE, args.snapshot_dir_old,
                     args.snapshot_dir_old, start_time=default_timer())
 

@@ -66,3 +66,10 @@ syntax_diffs:
                    _ASM_EXTABLE(1b, 3b)
                    : "=r" (err), ltype(x)
                    : "m" (__m(addr)), "i" (errret), "0" (err))
+slices:
+  - function: set_page_dirty
+    slice_old: tests/regression/sliced_functions/set_page_dirty/slice_old.ll
+    slice_new: tests/regression/sliced_functions/set_page_dirty/slice_new.ll
+  - function: set_cpus_allowed_ptr
+    slice_old: tests/regression/sliced_functions/set_cpus_allowed_ptr/slice_old.ll
+    slice_new: tests/regression/sliced_functions/set_cpus_allowed_ptr/slice_new.ll

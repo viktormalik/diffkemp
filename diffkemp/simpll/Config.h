@@ -35,6 +35,7 @@ extern cl::opt<bool> ControlFlowOpt;
 extern cl::opt<bool> PrintCallstacksOpt;
 extern cl::opt<bool> VerboseOpt;
 extern cl::opt<bool> VerboseMacrosOpt;
+extern cl::opt<bool> EquivalenceSlicerOpt;
 
 /// Tool configuration parsed from CLI options.
 class Config {
@@ -70,6 +71,8 @@ class Config {
     bool PrintAsmDiffs;
     // Show call stacks for non-equal functions
     bool PrintCallStacks;
+    // Removes equivalent parts of compared functions
+    bool EquivalenceSlicer;
 
     // Constructor for command-line use.
     Config();
@@ -87,19 +90,22 @@ class Config {
            bool PrintAsmDiffs = true,
            bool PrintCallStacks = true,
            bool Verbose = false,
-           bool VerboseMacros = false);
+           bool VerboseMacros = false,
+           bool EquivalenceSlicer = false);
     // Constructor without module loading (for tests).
     Config(std::string FirstFunName,
            std::string SecondFunName,
            std::string CacheDir,
            bool ControlFlowOnly = false,
            bool PrintAsmDiffs = true,
-           bool PrintCallStacks = true)
+           bool PrintCallStacks = true,
+           bool EquivalenceSlicer = false)
             : First(nullptr), Second(nullptr), FirstFunName(FirstFunName),
               SecondFunName(SecondFunName), FirstOutFile("/dev/null"),
               SecondOutFile("/dev/null"), CacheDir(CacheDir),
               ControlFlowOnly(ControlFlowOnly), PrintAsmDiffs(PrintAsmDiffs),
-              PrintCallStacks(PrintCallStacks) {}
+              PrintCallStacks(PrintCallStacks),
+              EquivalenceSlicer(EquivalenceSlicer) {}
 
     /// Sets debug types specified in the vector.
     void setDebugTypes(std::vector<std::string> &debugTypes);

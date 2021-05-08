@@ -51,7 +51,7 @@ class TaskSpec:
         self.new_snapshot = Snapshot(self.new_kernel, self.new_kernel)
         self.config = Config(self.old_snapshot, self.new_snapshot, False,
                              False, self.control_flow_only, False, False,
-                             False, None)
+                             False, None, False)
 
         self.functions = dict()
 
@@ -208,3 +208,27 @@ class SyntaxDiffSpec(TaskSpec):
     def add_syntax_diff_spec(self, symbol, def_old, def_new):
         """Add an expected syntax difference"""
         self.syntax_diffs[symbol] = DiffSpec(symbol, def_old, def_new)
+
+
+class ModelSliceSpec:
+    """
+    Specification of model slices. Contains the paths where old and new model
+    slice can be found.
+    """
+    def __init__(self, slice_old, slice_new):
+        self.slice_old = slice_old
+        self.slice_new = slice_new
+
+
+class SliceSpec(TaskSpec):
+    """
+    Task specification for test of slices difference.
+    Extends TaskSpec by concrete slices that should Diffkemp produce.
+    """
+    def __init__(self, spec, task_name, tasks_path, kernel_path):
+        TaskSpec.__init__(self, spec, task_name, tasks_path, kernel_path)
+        self.slicing_functions = dict()
+
+    def add_slice_spec(self, function, slice_old, slice_new):
+        """Add an expected slices of function"""
+        self.slicing_functions[function] = ModelSliceSpec(slice_old, slice_new)

@@ -21,7 +21,7 @@ def test_syntax_diff():
     config = Config(source_first, source_second, show_diff=True,
                     output_llvm_ir=False, control_flow_only=True,
                     print_asm_diffs=False, verbosity=False, use_ffi=False,
-                    semdiff_tool=None)
+                    semdiff_tool=None, equivalence_slicer=None)
     first = source_first.get_module_for_symbol(f)
     second = source_second.get_module_for_symbol(f)
     fun_result = functions_diff(mod_first=first, mod_second=second,

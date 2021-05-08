@@ -34,6 +34,7 @@ class ModuleComparator {
     const Config &config;
 
   public:
+    bool EqSlicerEnabled = true;
     /// Storing results of function comparisons.
     std::map<ConstFunPair, Result> ComparedFuns;
     // Structure size to structure name map.

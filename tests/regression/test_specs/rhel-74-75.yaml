@@ -15,3 +15,18 @@ syntax_diffs:
       ((phys_addr_t)((1ULL << __PHYSICAL_MASK_SHIFT) - 1))
     def_new: >
       ((phys_addr_t)(__sme_clr((1ULL << __PHYSICAL_MASK_SHIFT) - 1)))
+
+slices:
+  - function: seq_open
+    slice_old: tests/regression/sliced_functions/seq_open/slice_old.ll
+    slice_new: tests/regression/sliced_functions/seq_open/slice_new.ll
+  - function: proc_create_data
+    slice_old: tests/regression/sliced_functions/proc_create_data/slice_old.ll
+    slice_new: tests/regression/sliced_functions/proc_create_data/slice_new.ll
+  - function: generic_make_request
+    slice_old: tests/regression/sliced_functions/generic_make_request/slice_old.ll
+    slice_new: tests/regression/sliced_functions/generic_make_request/slice_new.ll
+  - function: lookup_bdev
+    slice_old: tests/regression/sliced_functions/lookup_bdev/slice_old.ll
+    slice_new: tests/regression/sliced_functions/lookup_bdev/slice_new.ll
+

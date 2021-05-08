@@ -217,7 +217,10 @@ def functions_diff(mod_first, mod_second,
                                print_asm_diffs=config.print_asm_diffs,
                                verbose=config.verbosity,
                                use_ffi=config.use_ffi,
-                               module_cache=module_cache)
+                               module_cache=module_cache,
+                               equivalence_slicer=config.equivalence_slicer)
+                result.first.filename = first_simpl
+                result.second.filename = second_simpl
                 if missing_defs:
                     # If there are missing function definitions, try to find
                     # their implementation, link them to the current modules,

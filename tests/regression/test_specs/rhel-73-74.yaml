@@ -12,4 +12,17 @@ syntax_diffs:
       percpu_from_op("mov", (pcp), "m"(pcp))
     def_new: >
       percpu_from_op("mov", pcp)
-
+      
+slices:
+  - function: blk_get_request
+    slice_old: tests/regression/sliced_functions/blk_get_request/slice_old.ll
+    slice_new: tests/regression/sliced_functions/blk_get_request/slice_new.ll
+  - function: dev_close
+    slice_old: tests/regression/sliced_functions/dev_close/slice_old.ll
+    slice_new: tests/regression/sliced_functions/dev_close/slice_new.ll
+  - function: down_write
+    slice_old: tests/regression/sliced_functions/down_write/slice_old.ll
+    slice_new: tests/regression/sliced_functions/down_write/slice_new.ll
+  - function: hci_unregister_dev
+    slice_old: tests/regression/sliced_functions/hci_unregister_dev/slice_old.ll
+    slice_new: tests/regression/sliced_functions/hci_unregister_dev/slice_new.ll

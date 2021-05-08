@@ -305,11 +305,9 @@ int DifferentialFunctionComparator::cmpOperations(
     if (isa<PHINode>(L) && isa<PHINode>(R)) {
         auto PhiL = dyn_cast<PHINode>(L);
         auto PhiR = dyn_cast<PHINode>(R);
-        if (PhiL->getNumIncomingValues() == PhiR->getNumIncomingValues()) {
-            needToCmpOperands = false;
-            phisToCompare.emplace_back(PhiL, PhiR);
-            return 0;
-        }
+        needToCmpOperands = false;
+        phisToCompare.emplace_back(PhiL, PhiR);
+        return 0;
     }
 
     if (Result) {
@@ -774,9 +772,19 @@ bool DifferentialFunctionComparator::cmpCallArgumentUsingCSource(
 /// in the appropriate llvm-lib subdirectory for more details.
 int DifferentialFunctionComparator::cmpBasicBlocks(
         const BasicBlock *BBL, const BasicBlock *BBR) const {
-    BasicBlock::const_iterator InstL = BBL->begin(), InstLE = BBL->end();
-    BasicBlock::const_iterator InstR = BBR->begin(), InstRE = BBR->end();
+    BasicBlock::const_iterator InstL = BBL->begin();
+    BasicBlock::const_iterator InstR = BBR->begin();
+    return cmpBasicBlocksFromInstructions(BBL, BBR, InstL, InstR);
+}
 
+/// Compare basic blocks from specified instructions
+int DifferentialFunctionComparator::cmpBasicBlocksFromInstructions(
+        const BasicBlock *BBL,
+        const BasicBlock *BBR,
+        BasicBlock::const_iterator InstL,
+        BasicBlock::const_iterator InstR) const {
+    BasicBlock::const_iterator InstLE = BBL->end();
+    BasicBlock::const_iterator InstRE = BBR->end();
     while (InstL != InstLE && InstR != InstRE) {
         if (isDebugInfo(*InstL)) {
             InstL++;
@@ -790,7 +798,6 @@ int DifferentialFunctionComparator::cmpBasicBlocks(
             CurrentLocL = &InstL->getDebugLoc();
         if ((&InstR->getDebugLoc())->get())
             CurrentLocR = &InstR->getDebugLoc();
-
         if (int Res = cmpOperationsWithOperands(&*InstL, &*InstR)) {
             // Detect a difference caused by a field access change that does
             // not affect semantics.
@@ -802,7 +809,6 @@ int DifferentialFunctionComparator::cmpBasicBlocks(
                 if (cmpFieldAccess(InstL, InstR) == 0)
                     continue;
             }
-
             // Some operations not affecting semantics and control flow may be
             // ignored (currently allocas and casts). This may help to handle
             // some small changes that do not affect semantics (it is also
@@ -829,7 +835,6 @@ int DifferentialFunctionComparator::cmpBasicBlocks(
                 return Res;
             }
         }
-
         ++InstL;
         ++InstR;
     }
@@ -1164,7 +1169,6 @@ int DifferentialFunctionComparator::cmpValues(const Value *L,
         // Repeat the comparison with replacements for all ignored values.
         return cmpValues(replaceL ? replaceL : L, replaceR ? replaceR : R);
     }
-
     int result = FunctionComparator::cmpValues(L, R);
     if (result) {
         if (isa<Constant>(L) && isa<Constant>(R)) {
@@ -1362,6 +1366,8 @@ int DifferentialFunctionComparator::cmpMemset(const CallInst *CL,
 /// be analysed.
 int DifferentialFunctionComparator::cmpPHIs(const PHINode *PhiL,
                                             const PHINode *PhiR) const {
+    if (PhiL->getNumOperands() != PhiR->getNumOperands())
+        return 1;
     for (unsigned i = 0; i < PhiL->getNumIncomingValues(); ++i) {
         bool match = false;
         for (unsigned j = 0; j < PhiR->getNumIncomingValues(); ++j) {
@@ -1407,7 +1413,7 @@ int DifferentialFunctionComparator::cmpOperationsWithOperands(
         for (unsigned i = 0, e = L->getNumOperands(); i != e; ++i) {
             Value *OpL = L->getOperand(i);
             Value *OpR = R->getOperand(i);
-
+            int sizeOfMaps = getSizeOfMaps();
             if (int Res = cmpValues(OpL, OpR)) {
                 if (isa<CallInst>(L) && isa<CallInst>(R)) {
                     Res = cmpCallArgumentUsingCSource(dyn_cast<CallInst>(L),
@@ -1417,6 +1423,12 @@ int DifferentialFunctionComparator::cmpOperationsWithOperands(
                                                       i);
                 }
                 return Res;
+            } else if (valuesMustExist && isa<Instruction>(OpL)
+                       && isa<Instruction>(OpR)) {
+                if (sizeOfMaps != getSizeOfMaps()) {
+                    eraseFromMaps(sizeOfMaps - 1);
+                    return 1;
+                }
             }
             // cmpValues should ensure this is true.
             assert(cmpTypes(OpL->getType(), OpR->getType()) == 0);
@@ -1503,4 +1515,27 @@ bool DifferentialFunctionComparator::equal(const Instruction *InstL,
         return false;
 
     return L->second == R->second;
+}
+
+void DifferentialFunctionComparator::eraseFromMaps(int num) const {
+    for (auto Inst : sn_mapL) {
+        if (Inst.getSecond() > num) {
+            sn_mapL.erase(Inst.getFirst());
+        }
+    }
+
+    for (auto Inst : sn_mapR) {
+        if (Inst.getSecond() > num) {
+            sn_mapR.erase(Inst.getFirst());
+        }
+    }
+}
+
+int DifferentialFunctionComparator::getSizeOfMaps() const {
+    return sn_mapL.size();
+}
+
+std::pair<DenseMap<const Value *, int> *, DenseMap<const Value *, int> *>
+        DifferentialFunctionComparator::getSnMaps() {
+    return {&sn_mapL, &sn_mapR};
 }

@@ -38,12 +38,39 @@ class DifferentialFunctionComparator : public FunctionComparator {
               LayoutL(F1->getParent()->getDataLayout()),
               LayoutR(F2->getParent()->getDataLayout()), ModComparator(MC) {}
 
+    std::pair<DenseMap<const Value *, int> *, DenseMap<const Value *, int> *>
+            getSnMaps();
+
     int compare() override;
     /// Check if two instructions were already compared as equal.
     bool equal(const Instruction *L, const Instruction *R);
     /// Storing pointers to instructions in which functions started to differ.
     mutable std::pair<const Instruction *, const Instruction *>
             DifferingInstructions;
+
+    /// Check if the given instruction can be ignored (it does not affect
+    /// semantics). Replacements of ignorable instructions are stored
+    /// inside the ignored instructions map.
+    bool maySkipInstruction(const Instruction *Inst) const;
+    /// Removes instructions in synchronization maps from given number
+    void eraseFromMaps(int num) const;
+    /// Returns actual size of synchronization maps
+    int getSizeOfMaps() const;
+    /// Detect cast instructions and ignore them when comparing the control flow
+    /// only. (The rest is the same as in LLVM.)
+    int cmpBasicBlocks(const BasicBlock *BBL,
+                       const BasicBlock *BBR) const override;
+    /// Compares basic blocks from specified instructions
+    int cmpBasicBlocksFromInstructions(const BasicBlock *BBL,
+                                       const BasicBlock *BBR,
+                                       BasicBlock::const_iterator InstL,
+                                       BasicBlock::const_iterator InstR) const;
+    /// Comparing PHI instructions
+    int cmpPHIs(const PHINode *PhiL, const PHINode *PhiR) const;
+    mutable std::vector<std::pair<const PHINode *, const PHINode *>>
+            phisToCompare;
+
+    bool valuesMustExist = false;
 
   protected:
     /// Specific comparison of GEP instructions/operators.
@@ -81,10 +108,6 @@ class DifferentialFunctionComparator : public FunctionComparator {
     /// Compare two instructions along with their operands.
     int cmpOperationsWithOperands(const Instruction *L,
                                   const Instruction *R) const;
-    /// Detect cast instructions and ignore them when comparing the control flow
-    /// only. (The rest is the same as in LLVM.)
-    int cmpBasicBlocks(const BasicBlock *BBL,
-                       const BasicBlock *BBR) const override;
     /// Implement comparison of global values that does not use a
     /// GlobalNumberState object, since that approach does not fit the use case
     /// of comparing functions in two different modules.
@@ -103,8 +126,6 @@ class DifferentialFunctionComparator : public FunctionComparator {
     /// Comparing of a structure size with a constant
     int cmpStructTypeSizeWithConstant(StructType *Type,
                                       const Value *Const) const;
-    /// Comparing PHI instructions
-    int cmpPHIs(const PHINode *PhiL, const PHINode *PhiR) const;
 
   private:
     const Config &config;
@@ -114,8 +135,6 @@ class DifferentialFunctionComparator : public FunctionComparator {
 
     mutable const DebugLoc *CurrentLocL, *CurrentLocR;
     mutable std::set<std::pair<const Value *, const Value *>> inverseConditions;
-    mutable std::vector<std::pair<const PHINode *, const PHINode *>>
-            phisToCompare;
     mutable std::unordered_map<const Value *, const Value *>
             ignoredInstructions;
 
@@ -154,11 +173,6 @@ class DifferentialFunctionComparator : public FunctionComparator {
     /// Takes all GEPs in a basic block and computes the sum of their offsets if
     /// constant (if not, it returns false).
     bool accumulateAllOffsets(const BasicBlock &BB, uint64_t &Offset) const;
-
-    /// Check if the given instruction can be ignored (it does not affect
-    /// semantics). Replacements of ignorable instructions are stored
-    /// inside the ignored instructions map.
-    bool maySkipInstruction(const Instruction *Inst) const;
 
     /// Check whether the given cast can be ignored (it does not affect
     /// semantics. First operands of ignorable casts are stored as their
