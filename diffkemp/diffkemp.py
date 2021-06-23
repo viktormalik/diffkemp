@@ -38,6 +38,9 @@ def __make_argument_parser():
     generate_ap.add_argument("--sysctl", action="store_true",
                              help="function list is a list of function "
                                   "parameters")
+    generate_ap.add_argument("--module-parameters", action="store_true",
+                             help="function list is a list of module "
+                                  "parameters")
     generate_ap.set_defaults(func=generate)
 
     # "compare" sub-command
@@ -118,6 +121,8 @@ def generate(args):
     # Build sources for symbols from the list into LLVM IR
     with open(args.functions_list, "r") as fun_list_file:
         for line in fun_list_file.readlines():
+            # enable comments inside functions list
+            line = line[:line.find('#')]
             symbol = line.strip()
             if not symbol or not (symbol[0].isalpha() or symbol[0] == "_"):
                 continue
@@ -131,6 +136,11 @@ def generate(args):
                 #    use the data variable
 
                 # Get module with sysctl definitions
+                symbol_and_value = [i.strip() for i in symbol.split('=')]
+                symbol = symbol_and_value[0]
+                value = symbol_and_value[1] \
+                    if len(symbol_and_value) == 2 else None
+
                 try:
                     sysctl_mod = source.get_sysctl_module(symbol)
                 except SourceNotFoundException:
@@ -155,6 +165,7 @@ def generate(args):
                             snapshot.add_fun(name=proc_fun,
                                              llvm_mod=proc_fun_mod,
                                              glob_var=None,
+                                             glob_var_value=value,
                                              tag="proc handler function",
                                              group=sysctl)
                             print("  {}: {} (proc handler)".format(
@@ -180,15 +191,55 @@ def generate(args):
                                 name=data_fun,
                                 llvm_mod=data_mod,
                                 glob_var=data.name,
+                                glob_var_value=value,
                                 tag="function using sysctl data "
                                     "variable \"{}\"".format(data.name),
                                 group=sysctl)
+                            with_value_string = " with {} as value".format(value) \
+                                if value else ''
                             print(
-                                "  {}: {} (using data variable \"{}\")".format(
+                                "  {}: {} (using data variable \"{}\"{})".format(
                                     data_fun,
                                     os.path.relpath(data_mod.llvm,
                                                     args.kernel_dir),
-                                    data.name))
+                                    data.name, with_value_string))
+            elif args.module_parameters:
+                # For kernel module parameters, we compile the module,
+                # collect the list of functions using the parameter variable,
+                # and include it into the snapshot.
+                # Format of the entries in the function list is:
+                #    <module directory>/<module name>:<parameter> [ = <value> ]
+                line = [i.strip() for i in line.split(':')]
+                mod = line[0].split('/')
+                mod_dir = '/'.join(mod[:-1])
+                mod_name = mod[-1]
+                param_with_value = [i.strip() for i in line[1].split('=')]
+                param = param_with_value[0]
+                value = param_with_value[1] \
+                    if len(param_with_value) == 2 else None
+
+                data_mod = source.get_module_for_kernel_mod(mod_dir, mod_name)
+                if not data_mod:
+                    continue
+                kernel_param = data_mod.find_param_var(param)
+                for data_fun in \
+                        data_mod.get_functions_using_param(kernel_param):
+                    snapshot.add_fun(
+                        name=data_fun,
+                        llvm_mod=data_mod,
+                        glob_var=kernel_param.name,
+                        glob_var_value=value,
+                        tag="function using module param variable \"{}\""
+                        .format(kernel_param.name)
+                    )
+                    with_value_string = " with {} as value".format(value) \
+                        if value else ''
+                    print(
+                        "  {}: {} (using parameter \"{}\"{})".format(
+                            data_fun,
+                            os.path.relpath(data_mod.llvm,
+                                            args.kernel_dir),
+                            kernel_param.name, with_value_string))
             else:
                 try:
                     # For a normal function, we compile its source and include
@@ -318,9 +369,10 @@ def compare(args):
             fun_result = functions_diff(
                 mod_first=old_fun_desc.mod, mod_second=new_fun_desc.mod,
                 fun_first=fun, fun_second=fun,
-                glob_var=glob_var, config=config,
-                prev_result_graph=result_graph, function_cache=cache,
-                module_cache=module_cache)
+                glob_var=glob_var, glob_var_value=old_fun_desc.glob_var_value,
+                config=config, prev_result_graph=result_graph,
+                function_cache=cache, module_cache=module_cache
+            )
             result_graph = fun_result.graph
 
             if fun_result is not None:

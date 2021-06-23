@@ -34,6 +34,7 @@
 #include "passes/StructureSizeAnalysis.h"
 #include "passes/UnifyMemcpyPass.h"
 #include "passes/VarDependencySlicer.h"
+#include "passes/VarValueDependencySlicer.h"
 #include <llvm/IR/PassManager.h>
 #if LLVM_VERSION_MAJOR >= 11
 #include <llvm/IR/PassManagerImpl.h>
@@ -44,6 +45,8 @@
 #include <llvm/Transforms/IPO/AlwaysInliner.h>
 #include <llvm/Transforms/Scalar/DCE.h>
 #include <llvm/Transforms/Scalar/LowerExpectIntrinsic.h>
+#include <llvm/Transforms/Scalar/SCCP.h>
+#include <llvm/Transforms/Scalar/SimplifyCFG.h>
 /// Preprocessing functions run on each module at the beginning.
 /// The following transformations are applied:
 /// 1. Slicing of program w.r.t. to the value of some global variable.
@@ -59,6 +62,8 @@
 void preprocessModule(Module &Mod,
                       Function *Main,
                       GlobalVariable *Var,
+                      Constant *VarValue,
+                      bool UseDefaultValue,
                       bool ControlFlowOnly) {
     if (Var) {
         // Slicing of the program w.r.t. the value of a global variable
@@ -69,6 +74,19 @@ void preprocessModule(Module &Mod,
 
         fpm.addPass(VarDependencySlicer{});
         fpm.run(*Main, fam, Var);
+
+        if (VarValue || UseDefaultValue) {
+            PassManager<Module,
+                        ModuleAnalysisManager,
+                        GlobalVariable *,
+                        Constant *>
+                    mpm;
+            ModuleAnalysisManager mam(false);
+            pb.registerModuleAnalyses(mam);
+
+            mpm.addPass(VarValueDependencySlicer{});
+            mpm.run(Mod, mam, Var, VarValue);
+        }
     }
 
     // Function passes
@@ -81,13 +99,16 @@ void preprocessModule(Module &Mod,
         fpm.addPass(ControlFlowSlicer{});
     fpm.addPass(SimplifyKernelFunctionCallsPass{});
     fpm.addPass(UnifyMemcpyPass{});
+    fpm.addPass(SCCPPass{});
     fpm.addPass(DCEPass{});
+    fpm.addPass(SimplifyCFGPass{});
     fpm.addPass(LowerExpectIntrinsicPass{});
     fpm.addPass(ReduceFunctionMetadataPass{});
     fpm.addPass(SeparateCallsToBitcastPass{});
 
     for (auto &Fun : Mod)
-        fpm.run(Fun, fam);
+        if (!Fun.empty())
+            fpm.run(Fun, fam);
 
     // Module passes
     ModulePassManager mpm(false);
@@ -234,10 +255,14 @@ void processAndCompare(Config &config, OverallResult &Result) {
     preprocessModule(*config.First,
                      config.FirstFun,
                      config.FirstVar,
+                     config.VarValue,
+                     config.UseDefaultValue,
                      config.ControlFlowOnly);
     preprocessModule(*config.Second,
                      config.SecondFun,
                      config.SecondVar,
+                     config.VarValue,
+                     config.UseDefaultValue,
                      config.ControlFlowOnly);
     config.refreshFunctions();
 

@@ -710,6 +710,34 @@ std::string valueToString(const Value *Val) {
     return DumpStrm.str();
 }
 
+Constant *getConstantFromString(Constant *initializer, std::string Val) {
+    if (initializer == nullptr)
+        return nullptr;
+
+    if (const ConstantInt *CI = dyn_cast<ConstantInt>(initializer)) {
+        uint64_t val;
+        int valtmp;
+        try {
+            valtmp = std::stoi(Val);
+        } catch (const std::invalid_argument &ia) {
+            exit(10);
+        }
+        val = valtmp;
+        return ConstantInt::get(CI->getType(), val, true);
+    }
+
+    if (const ConstantFP *CFP = dyn_cast<ConstantFP>(initializer)) {
+        double val;
+        try {
+            val = std::stod(Val);
+        } catch (const std::invalid_argument &ia) {
+            exit(10);
+        }
+        return ConstantFP::get(CFP->getType(), val);
+    }
+    exit(10);
+}
+
 /// Converts type to its (LLVM IR) string representation.
 std::string typeToString(Type *Ty) {
     std::string TyDump;

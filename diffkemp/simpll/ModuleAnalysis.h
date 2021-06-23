@@ -35,6 +35,8 @@ using namespace llvm;
 void preprocessModule(Module &Mod,
                       Function *Main,
                       GlobalVariable *Var,
+                      Constant *VarValue,
+                      bool UseDefaultValue,
                       bool ControlFlowOnly);
 
 /// Simplify two corresponding modules for the purpose of their subsequent

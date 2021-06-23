@@ -159,7 +159,7 @@ def functions_semdiff(first, second, fun_first, fun_second, config):
 
 def functions_diff(mod_first, mod_second,
                    fun_first, fun_second,
-                   glob_var, config,
+                   glob_var, config, glob_var_value=None,
                    prev_result_graph=None,
                    function_cache=None,
                    module_cache=None):
@@ -206,18 +206,21 @@ def functions_diff(mod_first, mod_second,
             else:
                 # Simplify modules and get the output graph.
                 first_simpl, second_simpl, curr_result_graph, missing_defs = \
-                    run_simpll(first=mod_first.llvm, second=mod_second.llvm,
-                               fun_first=fun_first, fun_second=fun_second,
-                               var=glob_var.name if glob_var else None,
-                               suffix=glob_var.name if glob_var else "simpl",
-                               cache_dir=function_cache.directory
-                               if function_cache else None,
-                               control_flow_only=config.control_flow_only,
-                               output_llvm_ir=config.output_llvm_ir,
-                               print_asm_diffs=config.print_asm_diffs,
-                               verbose=config.verbosity,
-                               use_ffi=config.use_ffi,
-                               module_cache=module_cache)
+                    run_simpll(
+                        first=mod_first.llvm, second=mod_second.llvm,
+                        fun_first=fun_first, fun_second=fun_second,
+                        var=glob_var.name if glob_var else None,
+                        var_value=glob_var_value if glob_var_value else None,
+                        suffix=glob_var.name if glob_var else "simpl",
+                        cache_dir=function_cache.directory
+                        if function_cache else None,
+                        control_flow_only=config.control_flow_only,
+                        output_llvm_ir=config.output_llvm_ir,
+                        print_asm_diffs=config.print_asm_diffs,
+                        verbose=config.verbosity,
+                        use_ffi=config.use_ffi,
+                        module_cache=module_cache
+                    )
                 if missing_defs:
                     # If there are missing function definitions, try to find
                     # their implementation, link them to the current modules,

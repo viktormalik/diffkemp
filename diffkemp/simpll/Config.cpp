@@ -13,6 +13,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "Config.h"
+#include "Utils.h"
 #include <llvm/Support/Debug.h>
 #include <llvm/Support/MemoryBuffer.h>
 #include <llvm/Support/raw_ostream.h>
@@ -93,8 +94,27 @@ Config::Config()
     }
     if (!VariableOpt.empty()) {
         // Parse --var option - find global variables with given name.
-        FirstVar = First->getGlobalVariable(VariableOpt, true);
-        SecondVar = Second->getGlobalVariable(VariableOpt, true);
+        std::string varName, varValue;
+        std::string vopt = VariableOpt;
+        size_t varOptDelimiterIndex = vopt.find(":");
+        if (varOptDelimiterIndex == std::string::npos)
+            varName = vopt;
+        else {
+            varName = vopt.substr(0, varOptDelimiterIndex);
+            varValue = vopt.substr(varOptDelimiterIndex + 1, vopt.size());
+        }
+
+        FirstVar = First->getGlobalVariable(varName, true);
+        SecondVar = Second->getGlobalVariable(varName, true);
+
+        if (vopt == varName) {
+            VarValue = nullptr;
+        } else if (varValue.empty() || varValue == "default")
+            UseDefaultValue = true;
+        else {
+            Constant *initializer = FirstVar->getInitializer();
+            VarValue = getConstantFromString(initializer, varValue);
+        }
     }
     if (!SuffixOpt.empty()) {
         // Parse --suffix option - add suffix to the names of output files.

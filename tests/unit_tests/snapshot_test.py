@@ -50,10 +50,12 @@ def test_load_snapshot_from_dir_functions():
           kind: function_list
           list:
           - glob_var: null
+            glob_var_value: null
             llvm: net/core/skbuff.ll
             name: ___pskb_trim
             tag: null
           - glob_var: null
+            glob_var_value: null
             llvm: mm/page_alloc.ll
             name: __alloc_pages_nodemask
             tag: null
@@ -104,12 +106,14 @@ def test_load_snapshot_from_dir_sysctls():
           list:
           - functions:
             - glob_var: null
+              glob_var_value: null
               llvm: kernel/sched/fair.ll
               name: sched_proc_update_handler
               tag: proc handler
             sysctl: kernel.sched_latency_ns
           - functions:
             - glob_var: null
+              glob_var_value: null
               llvm: kernel/sysctl.ll
               name: proc_dointvec_minmax
               tag: proc handler
@@ -184,11 +188,13 @@ def test_add_fun_sysctl_group():
 
     snap.add_fun_group("kernel.sched_latency_ns")
     mod = LlvmKernelModule("kernel/sched/debug.ll")
-    snap.add_fun("sched_debug_header",
-                 mod,
-                 "sysctl_sched_latency",
-                 "using_data_variable \"sysctl_sched_latency\"",
-                 "kernel.sched_latency_ns")
+    snap.add_fun(
+        "sched_debug_header",
+        mod,
+        glob_var="sysctl_sched_latency",
+        tag="using_data_variable \"sysctl_sched_latency\"",
+        group="kernel.sched_latency_ns"
+    )
 
     assert "sched_debug_header" in snap.fun_groups[
         "kernel.sched_latency_ns"].functions
@@ -212,12 +218,20 @@ def test_get_modules():
 
     snap.add_fun_group("kernel.sched_latency_ns")
     snap.add_fun_group("kernel.timer_migration")
-    snap.add_fun("sched_proc_update_handler",
-                 LlvmKernelModule("kernel/sched/fair.ll"), None,
-                 "proc_handler", "kernel.sched_latency_ns")
-    snap.add_fun("proc_dointvec_minmax", LlvmKernelModule("kernel/sysctl.ll"),
-                 None,
-                 "proc_handler", "kernel.timer_migration")
+    snap.add_fun(
+        "sched_proc_update_handler",
+        LlvmKernelModule("kernel/sched/fair.ll"),
+        glob_var=None,
+        tag="proc_handler",
+        group="kernel.sched_latency_ns"
+    )
+    snap.add_fun(
+        "proc_dointvec_minmax",
+        LlvmKernelModule("kernel/sysctl.ll"),
+        glob_var=None,
+        tag="proc_handler",
+        group="kernel.timer_migration"
+    )
 
     modules = snap.modules()
     assert len(modules) == 2
@@ -256,10 +270,20 @@ def test_get_by_name_sysctls():
         "snapshots-sysctl/linux-3.10.0-957.el7/kernel/sched/fair.ll")
     mod_sysctl = LlvmKernelModule(
         "snapshots-sysctl/linux-3.10.0-957.el7/kernel/sysctl.ll")
-    snap.add_fun("sched_proc_update_handler", mod_fair, None, "proc handler",
-                 "kernel.sched_latency_ns")
-    snap.add_fun("proc_dointvec_minmax", mod_sysctl, None, "proc handler",
-                 "kernel.timer_migration")
+    snap.add_fun(
+        "sched_proc_update_handler",
+        mod_fair,
+        glob_var=None,
+        tag="proc handler",
+        group="kernel.sched_latency_ns"
+    )
+    snap.add_fun(
+        "proc_dointvec_minmax",
+        mod_sysctl,
+        glob_var=None,
+        tag="proc handler",
+        group="kernel.timer_migration"
+    )
 
     # Test that the function
     fun = snap.get_by_name("proc_dointvec_minmax", "kernel.sched_latency_ns")
@@ -339,15 +363,22 @@ def test_to_yaml_sysctls():
 
     snap.add_fun_group("kernel.sched_latency_ns")
     snap.add_fun_group("kernel.timer_migration")
-    snap.add_fun("sched_proc_update_handler",
-                 LlvmKernelModule(
-                     "snapshots-sysctl/linux-3.10.0-957.el7/"
-                     "kernel/sched/fair.ll"),
-                 None, "proc handler", "kernel.sched_latency_ns")
-    snap.add_fun("proc_dointvec_minmax",
-                 LlvmKernelModule(
-                     "snapshots-sysctl/linux-3.10.0-957.el7/kernel/sysctl.ll"),
-                 None, "proc handler", "kernel.timer_migration")
+    snap.add_fun(
+        "sched_proc_update_handler",
+        LlvmKernelModule(
+            "snapshots-sysctl/linux-3.10.0-957.el7/kernel/sched/fair.ll"),
+        glob_var=None,
+        tag="proc handler",
+        group="kernel.sched_latency_ns"
+    )
+    snap.add_fun(
+        "proc_dointvec_minmax",
+        LlvmKernelModule(
+            "snapshots-sysctl/linux-3.10.0-957.el7/kernel/sysctl.ll"),
+        glob_var=None,
+        tag="proc handler",
+        group="kernel.timer_migration"
+    )
 
     yaml_str = snap.to_yaml()
     yaml_snap = yaml.safe_load(yaml_str)
@@ -367,6 +398,7 @@ def test_to_yaml_sysctls():
                 "name": "sched_proc_update_handler",
                 "llvm": "kernel/sched/fair.ll",
                 "glob_var": None,
+                "glob_var_value": None,
                 "tag": "proc handler"
             }
         elif g["sysctl"] == "kernel.timer_migration":
@@ -374,5 +406,6 @@ def test_to_yaml_sysctls():
                 "name": "proc_dointvec_minmax",
                 "llvm": "kernel/sysctl.ll",
                 "glob_var": None,
+                "glob_var_value": None,
                 "tag": "proc handler"
             }
