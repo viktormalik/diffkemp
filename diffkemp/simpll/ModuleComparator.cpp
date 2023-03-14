@@ -217,7 +217,8 @@ void ModuleComparator::compareFunctions(Function *FirstFun,
 ///         Inlining::MissingDef       when inlining was unsuccessful due to
 ///                                    missing function definition
 ModuleComparator::InliningResult
-        ModuleComparator::tryToInline(CallInst *Call, Program program) const {
+        ModuleComparator::tryToInline(CallInst *Call,
+                                      [[maybe_unused]] Program program) const {
     if (!Call)
         return NotInlined;
 
