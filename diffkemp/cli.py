@@ -12,6 +12,19 @@ def make_argument_parser():
     sub_ap = ap.add_subparsers(dest="command", metavar="command")
     sub_ap.required = True
 
+    # "generate-pattern" sub-command
+    generate_ap = sub_ap.add_parser("generate",
+                                    help="Generate pattern for diffkemp\
+                                    compare")
+    generate_ap.add_argument("--function", "-f", required=True,
+                            help="function for which we are generating pattern")
+    generate_ap.add_argument("diff_chunks",
+                             metavar="DIFF CHUNKS",
+                             help="diff chunks from which new pattern should\
+                             be infered",
+                             nargs="+")
+    generate_ap.set_defaults(func=diffkemp.diffkemp.generate)
+
     # "build" sub-command
     build_ap = sub_ap.add_parser("build",
                                  help="build snapshot from Makefile project")
