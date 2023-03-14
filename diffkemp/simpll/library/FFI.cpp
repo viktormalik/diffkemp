@@ -16,6 +16,7 @@
 #include "Config.h"
 #include "ModuleAnalysis.h"
 #include "Output.h"
+#include "PatternAnalysis.h"
 #include "library/DiffKempUtils.h"
 #include "library/SysctlTable.h"
 #include "passes/CalledFunctionsAnalysis.h"
@@ -215,6 +216,12 @@ struct kernel_param getData(const char *Sysctl, void *SysctlTableRaw) {
     return kernel_param{Result.Var ? Result.Var->getName().data() : nullptr,
                         indices,
                         Result.indices.size()};
+}
+
+void runGeneratePattern(const char *function,
+                        const char *file1,
+                        const char *file2) {
+    generatePattern(function, file1, file2);
 }
 
 /// Simplifies modules and compares the specified functions.
