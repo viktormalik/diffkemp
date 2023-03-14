@@ -3,6 +3,11 @@ Python interface for the SimpLL library.
 """
 from diffkemp.simpll.simpll_lib import ffi, lib
 
+def run_generate_pattern(function, files):
+    func = ffi.new("char []", function.encode("ascii"))
+    file1 = ffi.new("char []", files[0].encode("ascii"))
+    file2 = ffi.new("char []", files[1].encode("ascii"))
+    lib.runGeneratePattern(func, file1, file2)
 
 def _ptrarray_to_list(ptrarray):
     """Converts a ptr_array structure from SimpLL into a Python list."""
