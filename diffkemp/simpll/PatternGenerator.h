@@ -17,7 +17,7 @@
 
 class PatternGenerator {
   public:
-    PatternGenerator() : isFreshRun(true) {
+    PatternGenerator() : ctx(), isFreshRun(true) {
     };
 
     virtual ~PatternGenerator() = default;
@@ -42,6 +42,7 @@ class PatternGenerator {
     void addFileForInference(std::string fileName) const;
 
   private:
+    llvm::LLVMContext ctx;
     mutable bool isFreshRun;
     mutable std::unique_ptr<llvm::Module> pattern;
 };
