@@ -15,10 +15,28 @@
 #include "ModuleAnalysis.h"
 #include "ModuleComparator.h"
 #include "Output.h"
+#include "PatternAnalysis.h"
 #include "Utils.h"
 
 using namespace llvm;
 
+cl::SubCommand PatternSubCommnad(
+        "pattern",
+        "Subcommand for all nested options related to pattern generation");
+
+cl::opt<std::string>
+        PatternFunctionOpt("fun",
+                           cl::value_desc("function"),
+                           cl::desc("Specify function to be analysed"),
+                           cl::sub(PatternSubCommnad));
+cl::opt<std::string> PatternFileFirst(cl::Positional,
+                                      cl::Required,
+                                      cl::desc("<first file>"),
+                                      cl::sub(PatternSubCommnad));
+cl::opt<std::string> PatternFileSecond(cl::Positional,
+                                       cl::Required,
+                                       cl::desc("<second file>"),
+                                       cl::sub(PatternSubCommnad));
 // Command line options
 cl::OptionCategory SimpLLCategory("SimpLL options",
                                   "Options for controlling the SimpLL tool");
@@ -112,38 +130,46 @@ int main(int argc, const char **argv) {
     cl::HideUnrelatedOptions(SimpLLCategory);
     cl::ParseCommandLineOptions(argc, argv);
 
-    // Parse --fun option
-    auto FunName = parseFunOption();
+    // if pattern function options is not empty, then we are using the
+    // pattern subcommand
+    if (PatternSubCommnad) {
+        generatePattern(
+                PatternFunctionOpt, PatternFileFirst, PatternFileSecond);
+    } else {
+        // Parse --fun option
+        auto FunName = parseFunOption();
 
-    // Load modules and create Config based on given CLI options
-    LLVMContext context_first, context_second;
-    SMDiagnostic err;
-    std::unique_ptr<Module> FirstModule(
-            parseIRFile(FirstFileOpt, err, context_first));
-    std::unique_ptr<Module> SecondModule(
-            parseIRFile(SecondFileOpt, err, context_second));
-    Config config(FunName.first,
-                  FunName.second,
-                  FirstModule.get(),
-                  SecondModule.get(),
-                  !SuffixOpt.empty() ? addSuffix(FirstFileOpt, SuffixOpt) : "",
-                  !SuffixOpt.empty() ? addSuffix(SecondFileOpt, SuffixOpt) : "",
-                  CacheDirOpt,
-                  PatternConfigOpt,
-                  VariableOpt,
-                  OutputLlvmIROpt,
-                  ControlFlowOpt,
-                  PrintAsmDiffsOpt,
-                  PrintCallstacksOpt,
-                  VerbosityOpt);
+        // Load modules and create Config based on given CLI options
+        LLVMContext context_first, context_second;
+        SMDiagnostic err;
+        std::unique_ptr<Module> FirstModule(
+                parseIRFile(FirstFileOpt, err, context_first));
+        std::unique_ptr<Module> SecondModule(
+                parseIRFile(SecondFileOpt, err, context_second));
+        Config config(
+                FunName.first,
+                FunName.second,
+                FirstModule.get(),
+                SecondModule.get(),
+                !SuffixOpt.empty() ? addSuffix(FirstFileOpt, SuffixOpt) : "",
+                !SuffixOpt.empty() ? addSuffix(SecondFileOpt, SuffixOpt) : "",
+                CacheDirOpt,
+                PatternConfigOpt,
+                VariableOpt,
+                OutputLlvmIROpt,
+                ControlFlowOpt,
+                PrintAsmDiffsOpt,
+                PrintCallstacksOpt,
+                VerbosityOpt);
 
-    // Run transformations and the comparison.
-    OverallResult Result;
-    processAndCompare(config, Result);
+        // Run transformations and the comparison.
+        OverallResult Result;
+        processAndCompare(config, Result);
 
-    // Report the result to standard output.
-    reportOutput(Result);
+        // Report the result to standard output.
+        reportOutput(Result);
 
-    llvm_shutdown();
+        llvm_shutdown();
+    }
     return 0;
 }
