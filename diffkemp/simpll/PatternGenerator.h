@@ -39,12 +39,12 @@ class PatternGenerator {
         return *this;
     }
 
-    void addFileForInference(std::string fileName) const;
+    void addFileForInference(std::string fileName);
 
   private:
     llvm::LLVMContext ctx;
-    mutable bool isFreshRun;
-    mutable std::unique_ptr<llvm::Module> pattern;
+    bool isFreshRun;
+    std::unique_ptr<llvm::Module> pattern;
 };
 
 #endif // DIFFKEMP_SIMPLL_PATTERNGENERATOR_H

@@ -1,6 +1,6 @@
 #include "PatternGenerator.h"
 
-void PatternGenerator::addFileForInference(std::string fileName) const {
+void PatternGenerator::addFileForInference(std::string fileName) {
     llvm::SMDiagnostic err;
     std::unique_ptr<llvm::Module> mod(llvm::parseIRFile(fileName, err, ctx));
     if (!mod) {
