@@ -22,23 +22,6 @@ class PatternGenerator {
 
     virtual ~PatternGenerator() = default;
 
-    PatternGenerator(const PatternGenerator &other) noexcept {
-        isFreshRun = other.isFreshRun;
-    };
-
-    PatternGenerator(PatternGenerator &&other) noexcept {
-        std::swap(isFreshRun, other.isFreshRun);
-    };
-
-    PatternGenerator &operator=(const PatternGenerator &other) {
-        return *this = PatternGenerator(other);
-    }
-
-    PatternGenerator &operator=(PatternGenerator &&other) {
-        std::swap(isFreshRun, other.isFreshRun);
-        return *this;
-    }
-
     void addFileForInference(std::string fileName);
 
   private:
