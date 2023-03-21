@@ -30,4 +30,15 @@ class PatternGenerator {
     std::unique_ptr<llvm::Module> pattern;
 };
 
+struct PatternCandidate {
+    std::string function{""};
+    std::vector<llvm::StringRef> snapshots;
+    PatternCandidate(){};
+};
+
+class PatternGeneratorConfig {
+  public:
+    std::vector<PatternCandidate> candidates;
+};
+
 #endif // DIFFKEMP_SIMPLL_PATTERNGENERATOR_H

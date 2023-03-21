@@ -18,6 +18,29 @@
 
 using namespace llvm::yaml;
 
+namespace llvm {
+namespace yaml {
+template <> struct MappingTraits<PatternCandidate> {
+    static void mapping(IO &io, PatternCandidate &candidate) {
+        io.mapOptional("function", candidate.function);
+        io.mapOptional("snapshots", candidate.snapshots);
+    }
+};
+} // namespace yaml
+} // namespace llvm
+
+LLVM_YAML_IS_SEQUENCE_VECTOR(PatternCandidate);
+
+namespace llvm {
+namespace yaml {
+template <> struct MappingTraits<PatternGeneratorConfig> {
+    static void mapping(IO &io, PatternGeneratorConfig &cfg) {
+        io.mapRequired("candidates", cfg.candidates);
+    }
+};
+} // namespace yaml
+} // namespace llvm
+
 // CallInfo to YAML
 namespace llvm {
 namespace yaml {
@@ -143,6 +166,11 @@ template <> struct MappingTraits<OverallResult> {
 void reportOutput(OverallResult &result) {
     llvm::yaml::Output output(outs());
     output << result;
+}
+
+void reportPatternConfig(PatternGeneratorConfig &cfg) {
+    llvm::yaml::Output output(outs());
+    output << cfg;
 }
 
 /// Report the overall result in YAML format to a string.
