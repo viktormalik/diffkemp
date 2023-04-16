@@ -18,28 +18,31 @@
 
 using namespace llvm::yaml;
 
-namespace llvm {
-namespace yaml {
-template <> struct MappingTraits<PatternCandidate> {
-    static void mapping(IO &io, PatternCandidate &candidate) {
-        io.mapOptional("function", candidate.function);
-        io.mapOptional("snapshots", candidate.snapshots);
-    }
-};
-} // namespace yaml
-} // namespace llvm
+// namespace llvm {
+// namespace yaml {
+// template <> struct MappingTraits<PatternCandidate> {
+//     static void mapping(IO &io, PatternCandidate &candidate) {
+//         io.mapRequired("name", candidate.function);
+//         io.mapOptional("alias", candidate.alias);
+//         io.mapRequired("old_snapshot_path", candidate.oldSnapshotPath);
+//         io.mapRequired("new_snapshot_path", candidate.newSnapshotPath);
+//     }
+// };
+// } // namespace yaml
+// } // namespace llvm
+// LLVM_YAML_IS_SEQUENCE_VECTOR(PatternCandidate);
 
-LLVM_YAML_IS_SEQUENCE_VECTOR(PatternCandidate);
-
-namespace llvm {
-namespace yaml {
-template <> struct MappingTraits<PatternGeneratorConfig> {
-    static void mapping(IO &io, PatternGeneratorConfig &cfg) {
-        io.mapRequired("candidates", cfg.candidates);
-    }
-};
-} // namespace yaml
-} // namespace llvm
+// namespace llvm {
+// namespace yaml {
+// template <> struct MappingTraits<PatternInfo> {
+//     static void mapping(IO &io, PatternInfo &info) {
+//         io.mapRequired("name", info.name);
+//         io.mapRequired("candidates", info.candidates);
+//     }
+// };
+// } // namespace yaml
+// } // namespace llvm
+// LLVM_YAML_IS_SEQUENCE_VECTOR(PatternInfo);
 
 // CallInfo to YAML
 namespace llvm {
@@ -168,10 +171,11 @@ void reportOutput(OverallResult &result) {
     output << result;
 }
 
-void reportPatternConfig(PatternGeneratorConfig &cfg) {
-    llvm::yaml::Output output(outs());
-    output << cfg;
-}
+// // TODO: remove me?
+// void reportPatternConfig(PatternGeneratorConfig &cfg) {
+//     llvm::yaml::Output output(outs());
+//     output << cfg;
+// }
 
 /// Report the overall result in YAML format to a string.
 std::string reportOutputToString(OverallResult &result) {

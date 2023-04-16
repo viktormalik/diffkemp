@@ -82,7 +82,7 @@ void freePointerArray(struct ptr_array PtrArr) { delete[] PtrArr.arr; }
 
 void freeStringArray(struct ptr_array PtrArr) {
     for (unsigned long i = 0; i < PtrArr.len; i++)
-        delete[](char *) PtrArr.arr[i];
+        delete[] (char *)PtrArr.arr[i];
 
     freePointerArray(PtrArr);
 }
@@ -218,10 +218,22 @@ struct kernel_param getData(const char *Sysctl, void *SysctlTableRaw) {
                         Result.indices.size()};
 }
 
-void runGeneratePattern(const char *function,
-                        const char *file1,
-                        const char *file2) {
-    generatePattern(function, file1, file2);
+void readPatternConfig(const char *path) { readPatternConfigImpl(path); }
+
+void runGeneratePattern(const char *function, const char *fileName) {
+    generatePattern("", function, fileName);
+}
+
+void runGeneratePatternV2(const char *firstFun,
+                          const char *firstFileName,
+                          const char *secondFun,
+                          const char *secondFileName) {
+    generatePatternV2(firstFun, secondFun, firstFileName, secondFileName, "");
+}
+
+void reportPattern() {
+    // TODO: I don't really like this approach
+    reportPatternImpl();
 }
 
 /// Simplifies modules and compares the specified functions.

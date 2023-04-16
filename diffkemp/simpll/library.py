@@ -3,11 +3,18 @@ Python interface for the SimpLL library.
 """
 from diffkemp.simpll.simpll_lib import ffi, lib
 
+
 def run_generate_pattern(function, files):
     func = ffi.new("char []", function.encode("ascii"))
-    file1 = ffi.new("char []", files[0].encode("ascii"))
-    file2 = ffi.new("char []", files[1].encode("ascii"))
-    lib.runGeneratePattern(func, file1, file2)
+    for file in files:
+        file = ffi.new("char []", file.encode("ascii"))
+        lib.runGeneratePattern(func, file)
+    lib.reportPattern()
+
+
+def run_pattern_info(path):
+    lib.readPatternConfig(ffi.new("char []", path.encode("ascii")))
+
 
 def _ptrarray_to_list(ptrarray):
     """Converts a ptr_array structure from SimpLL into a Python list."""
@@ -35,6 +42,7 @@ def _stringarray_to_list(ptrarray):
 
 class SimpLLModule:
     """Represents a Module class in LLVM."""
+
     def __init__(self, path):
         self.pointer = lib.loadModule(ffi.new("char []", path.encode("ascii")))
         if self.pointer == ffi.NULL:
@@ -91,6 +99,7 @@ class SimpLLModule:
 
 class SimpLLFunction:
     """Represents a Function class in LLVM."""
+
     def __init__(self, module, pointer):
         self.module = module
         self.pointer = pointer

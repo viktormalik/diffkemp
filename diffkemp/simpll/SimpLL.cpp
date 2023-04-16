@@ -29,14 +29,10 @@ cl::opt<std::string>
                            cl::value_desc("function"),
                            cl::desc("Specify function to be analysed"),
                            cl::sub(PatternSubCommnad));
-cl::opt<std::string> PatternFileFirst(cl::Positional,
-                                      cl::Required,
-                                      cl::desc("<first file>"),
-                                      cl::sub(PatternSubCommnad));
-cl::opt<std::string> PatternFileSecond(cl::Positional,
-                                       cl::Required,
-                                       cl::desc("<second file>"),
-                                       cl::sub(PatternSubCommnad));
+cl::opt<std::vector<std::string>> PatternFiles(cl::Positional,
+                                               cl::Required,
+                                               cl::desc("<files>"),
+                                               cl::sub(PatternSubCommnad));
 // Command line options
 cl::OptionCategory SimpLLCategory("SimpLL options",
                                   "Options for controlling the SimpLL tool");
@@ -133,8 +129,9 @@ int main(int argc, const char **argv) {
     // if pattern function options is not empty, then we are using the
     // pattern subcommand
     if (PatternSubCommnad) {
-        generatePattern(
-                PatternFunctionOpt, PatternFileFirst, PatternFileSecond);
+        for (const auto &file : PatternFiles) {
+            generatePattern(PatternFunctionOpt, file, "");
+        }
     } else {
         // Parse --fun option
         auto FunName = parseFunOption();

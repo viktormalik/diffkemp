@@ -16,8 +16,16 @@ def make_argument_parser():
     generate_ap = sub_ap.add_parser("generate",
                                     help="Generate pattern for diffkemp\
                                     compare")
-    generate_ap.add_argument("--function", "-f", required=True,
-                            help="function for which we are generating pattern")
+    generate_ap.add_argument(
+        "--pattern-config",
+        "-c",
+        required=False,
+        help="function for which we are generating pattern")
+    generate_ap.add_argument(
+        "--function",
+        "-f",
+        required=False,
+        help="function for which we are generating pattern")
     generate_ap.add_argument("diff_chunks",
                              metavar="DIFF CHUNKS",
                              help="diff chunks from which new pattern should\

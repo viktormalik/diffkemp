@@ -18,7 +18,7 @@
 #include "Config.h"
 #include "ModuleAnalysis.h"
 #include "ModuleComparator.h"
-#include "PatternGenerator.h"
+// #include "PatternGenerator.h"
 #include "Utils.h"
 
 /// Report the overall result in YAML format to stdout.
