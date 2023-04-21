@@ -1,19 +1,21 @@
 #include "PatternGenerator.h"
 
-void PatternGenerator::cloneFunction(llvm::Function &dst, llvm::Function &src) {
+Function *PatternGenerator::cloneFunction(Function *dst, Function *src) {
     llvm::ValueToValueMapTy tmpValueMap;
-    auto patternFuncArgIter = dst.arg_begin();
-    for (auto &arg : src.args()) {
+    auto patternFuncArgIter = dst->arg_begin();
+    for (auto &arg : src->args()) {
         patternFuncArgIter->setName(arg.getName());
         tmpValueMap[&arg] = &(*patternFuncArgIter++);
     }
 
     llvm::SmallVector<llvm::ReturnInst *, 8> returns;
-    llvm::CloneFunctionInto(&dst,
-                            &src,
+    llvm::CloneFunctionInto(dst,
+                            src,
                             tmpValueMap,
                             llvm::CloneFunctionChangeType::DifferentModule,
                             returns);
+    // check if failed
+    return dst;
 };
 
 bool PatternGenerator::addFunctionToPattern(

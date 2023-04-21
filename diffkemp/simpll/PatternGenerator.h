@@ -59,7 +59,7 @@ class PatternGenerator {
     mutable std::unordered_map<std::string, std::unique_ptr<llvm::Module>>
             patterns;
 
-    void cloneFunction(llvm::Function &, llvm::Function &);
+    Function *cloneFunction(Function *, Function *);
 };
 
 struct PatternCandidate {
