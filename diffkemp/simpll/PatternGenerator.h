@@ -21,11 +21,25 @@
 using namespace llvm;
 
 #include <iostream>
+#include <map>
 #include <memory>
 #include <unordered_map>
 #include <utility>
 
-// class Pattern {};
+class PatternRepresentation {
+    friend std::ostream &operator<<(std::ostream &os,
+                                    PatternRepresentation &pg);
+
+  private:
+    LLVMContext context;
+
+  public:
+    PatternRepresentation(std::string name)
+            : context(), mod(new Module(name, context)),
+              functions(nullptr, nullptr){};
+    std::unique_ptr<Module> mod;
+    std::pair<Function *, Function *> functions;
+};
 
 class PatternGenerator {
   public:
@@ -55,8 +69,7 @@ class PatternGenerator {
     mutable LLVMContext firstCtx;
     mutable LLVMContext secondCtx;
     mutable bool isFreshRun;
-    mutable std::unique_ptr<llvm::Module> pattern;
-    mutable std::unordered_map<std::string, std::unique_ptr<llvm::Module>>
+    mutable std::map<std::string, std::unique_ptr<PatternRepresentation>>
             patterns;
 
     Function *cloneFunction(Function *, Function *);
