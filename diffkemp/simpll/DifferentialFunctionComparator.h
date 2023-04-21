@@ -251,6 +251,8 @@ class DifferentialFunctionComparator : public FunctionComparator {
     /// (any instruction within it) access the same pointer and one of the
     /// accesses is a store and the other one is a load.
     bool isDependingOnReloc(const Instruction &Inst) const;
+
+    friend class PatternGenerator;
 };
 
 #endif // DIFFKEMP_SIMPLL_DIFFERENTIALFUNCTIONCOMPARATOR_H

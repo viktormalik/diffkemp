@@ -1,5 +1,14 @@
 #include "PatternGenerator.h"
 
+void PatternGenerator::attachMetadata(Instruction *instr,
+                                      std::string metadataStr) {
+    // TODO: add some checking
+    auto &instrContext = instr->getContext();
+    MDNode *node =
+            MDNode::get(instrContext, MDString::get(instrContext, metadataStr));
+    instr->setMetadata("diffkemp.pattern", node);
+}
+
 Function *PatternGenerator::cloneFunction(Function *dst, Function *src) {
     llvm::ValueToValueMapTy tmpValueMap;
     auto patternFuncArgIter = dst->arg_begin();
@@ -18,134 +27,159 @@ Function *PatternGenerator::cloneFunction(Function *dst, Function *src) {
     return dst;
 };
 
-bool PatternGenerator::addFunctionToPattern(
+bool PatternGenerator::addFunctionToPattern(Module *mod,
+                                            Function *PatternFun,
+                                            Function *CandidateFun,
+                                            std::string patternName) {
+    Config conf{PatternFun->getName().str(),
+                CandidateFun->getName().str(),
+                this->patterns[patternName]->mod.get(),
+                mod};
+    conf.refreshFunctions();
+
+    std::set<const Function *> CalledFirst;
+    std::set<const Function *> CalledSecond;
+    auto DI = std::make_unique<DebugInfo>(*conf.First,
+                                          *conf.Second,
+                                          PatternFun,
+                                          CandidateFun,
+                                          CalledFirst,
+                                          CalledSecond);
+
+    StructureSizeAnalysis::Result StructSizeMapL;
+    StructureSizeAnalysis::Result StructSizeMapR;
+    StructureDebugInfoAnalysis::Result StructDIMapL;
+    StructureDebugInfoAnalysis::Result StructDIMapR;
+
+    auto modComp = std::make_unique<ModuleComparator>(*conf.First,
+                                                      *conf.Second,
+                                                      conf,
+                                                      DI.get(),
+                                                      StructSizeMapL,
+                                                      StructSizeMapR,
+                                                      StructDIMapL,
+                                                      StructDIMapR);
+
+    if (!(conf.FirstFun && conf.SecondFun)) {
+        return false;
+    }
+    auto diffComp = std::make_unique<DifferentialFunctionComparator>(
+            PatternFun,
+            CandidateFun,
+            conf,
+            DI.get(),
+            &modComp.get()->Patterns,
+            modComp.get());
+
+    modComp->ComparedFuns.emplace(std::make_pair(PatternFun, CandidateFun),
+                                  Result(PatternFun, CandidateFun));
+
+    auto BBL = PatternFun->begin();
+    auto BBR = CandidateFun->begin();
+    bool insidePatternValueRange = false;
+    while (BBL != PatternFun->end() && BBR != CandidateFun->end()) {
+        auto InL = BBL->begin();
+        auto InR = BBR->begin();
+        while (InL != BBL->end() || InR != BBR->end()) {
+            if (diffComp->maySkipInstruction(&(*InL))) {
+                InL++;
+                continue;
+            }
+            if (diffComp->maySkipInstruction(&(*InR))) {
+                InR++;
+                continue;
+            }
+
+            if (diffComp->cmpOperationsWithOperands(&(*InL), &(*InR))) {
+                if (!insidePatternValueRange) { // and difference is in type
+                                                // or value
+                    attachMetadata(&(*InL), "pattern-start");
+                    attachMetadata(&(*InR), "pattern-start");
+                    insidePatternValueRange = true;
+                }
+                std::cout << "Functions do differ" << std::endl;
+                // patterns lasts till the next non-differing
+                // instruction
+            } else {
+                if (insidePatternValueRange) {
+                    std::cout << "end of pattern range" << std::endl;
+                    attachMetadata(&(*InL), "pattern-end");
+                    attachMetadata(&(*InR), "pattern-end");
+                }
+            }
+            InR++;
+            InL++;
+        }
+        BBR++;
+        BBL++;
+    }
+    return true;
+}
+
+bool PatternGenerator::addFunctionPairToPattern(
         std::pair<std::string, std::string> moduleFiles,
         std::pair<std::string, std::string> funNames,
         std::string patternName) {
+
+    std::cout << "Process of adding function to a pattern" << std::endl;
+
     llvm::SMDiagnostic err;
-    std::unique_ptr<Module> oldMod(
-            parseIRFile(moduleFiles.first, err, firstCtx));
-    std::unique_ptr<Module> newMod(
+    std::unique_ptr<Module> ModL(parseIRFile(moduleFiles.first, err, firstCtx));
+    std::unique_ptr<Module> ModR(
             parseIRFile(moduleFiles.second, err, secondCtx));
-    if (!oldMod || !newMod) {
+    if (!ModL || !ModR) {
         err.print("Diffkemp", llvm::errs());
         return false;
     }
 
-    auto oldFun = oldMod->getFunction(funNames.first);
-    auto newFun = newMod->getFunction(funNames.second);
-    if (!oldFun || !newFun) {
+    Function *FunL = ModL->getFunction(funNames.first);
+    Function *FunR = ModR->getFunction(funNames.second);
+    if (!FunL || !FunR) {
         // TODO: Add some kind of exception
         return false;
     }
+
     if (this->patterns.find(patternName) == this->patterns.end()) {
         this->patterns[patternName] =
-                std::make_unique<llvm::Module>(patternName, this->firstCtx);
+                std::make_unique<PatternRepresentation>(patternName);
+        auto PatternRepr = this->patterns[patternName].get();
+        PatternRepr->functions.first = cloneFunction(
+                Function::Create(FunL->getFunctionType(),
+                                 FunL->getLinkage(),
+                                 "diffkemp.old." + FunL->getName(),
+                                 PatternRepr->mod.get()),
+                FunL);
+        PatternRepr->functions.second = cloneFunction(
+                Function::Create(FunR->getFunctionType(),
+                                 FunR->getLinkage(),
+                                 "diffkemp.new." + FunR->getName(),
+                                 PatternRepr->mod.get()),
+                FunR);
+        std::cout << *PatternRepr << std::endl;
+        /// Pattern was empty, hence provided functions are the most
+        /// specific pattern that we can infere, thus generation have
+        /// been successful and we are returning true.
+        // TODO: Uncomment me for final version
+        return true;
     }
 
-    Config conf{funNames.first, funNames.second, oldMod.get(), newMod.get()};
-    OverallResult res;
-    processAndCompare(conf, res);
+    auto resultL = this->addFunctionToPattern(
+            ModL.get(),
+            this->patterns[patternName]->functions.first,
+            FunL,
+            patternName);
+    auto resultR = this->addFunctionToPattern(
+            ModR.get(),
+            this->patterns[patternName]->functions.second,
+            FunR,
+            patternName);
 
-    for (const auto &result : res.functionResults) {
-        for (const auto &obj : result.DifferingObjects) {
-            std::cout << obj->getKind() << std::endl;
-        }
+    std::cout << *(this->patterns[patternName]) << std::endl;
+
+    if (!resultL || !resultR) {
+        return false;
     }
     return true;
-
-#if 0
-    /// If patter is null, then this is the first call of the function,
-    /// in that case copy the function from first module and use it in
-    /// further generation.
-    pattern = std::make_unique<llvm::Module>("tmp", ctx);
-
-    auto patternFunc = llvm::Function::Create(func->getFunctionType(),
-                                              func->getLinkage(),
-                                              "diffkemp.old.add",
-                                              *pattern);
-    if (patternFunc == nullptr) {
-        std::cerr << "Error: Pattern func is null" << std::endl;
-        return;
-    }
-
-    cloneFunction(*patternFunc, *func);
-    for (auto &BB : *patternFunc) {
-        for (auto &inst : BB) {
-            /// Attach some kind of metadata in case of `store`
-            /// instruction
-            if (inst.getOpcodeName() == std::string("store")) {
-                auto &instrCtx = inst.getContext();
-                llvm::MDNode *node = llvm::MDNode::get(
-                        instrCtx,
-                        llvm::MDString::get(instrCtx, "pattern-start"));
-                inst.setMetadata("diffkemp.pattern", node);
-            } else if (inst.getOpcodeName() == std::string("add")) {
-                auto &instrCtx = inst.getContext();
-                llvm::MDNode *node = llvm::MDNode::get(
-                        instrCtx, llvm::MDString::get(instrCtx, "pattern-end"));
-                inst.setMetadata("diffkemp.pattern", node);
-            }
-        }
-    }
-    pattern->dump();
-    return true;
-#endif
-}
-
-void PatternGenerator::addFileForInference(std::string patternName,
-                                           std::string funcName,
-                                           std::string fileName) {
-    llvm::SMDiagnostic err;
-    std::unique_ptr<llvm::Module> mod(
-            llvm::parseIRFile(fileName, err, firstCtx));
-    if (!mod) {
-        err.print("Diffkemp", llvm::errs());
-    }
-    auto func = mod->getFunction(funcName);
-    if (func == nullptr) {
-        // TODO: Add some kind of exception
-        return;
-    }
-    if (this->patterns.find(patternName) == this->patterns.end()) {
-        this->patterns[patternName] =
-                std::make_unique<llvm::Module>(patternName, firstCtx);
-    }
-    /// If patter is null, then this is the first call of the function,
-    /// in that case copy the function from first module and use it in
-    /// further generation.
-    pattern = std::make_unique<llvm::Module>("tmp", firstCtx);
-
-    auto patternFunc = llvm::Function::Create(func->getFunctionType(),
-                                              func->getLinkage(),
-                                              "diffkemp.old.add",
-                                              *pattern);
-    if (patternFunc == nullptr) {
-        std::cerr << "Error: Pattern func is null" << std::endl;
-        return;
-    }
-
-    cloneFunction(*patternFunc, *func);
-    for (auto &BB : *patternFunc) {
-        for (auto &inst : BB) {
-            /// Attach some kind of metadata in case of `store`
-            /// instruction
-            if (inst.getOpcodeName() == std::string("store")) {
-                auto &instrCtx = inst.getContext();
-                llvm::MDNode *node = llvm::MDNode::get(
-                        instrCtx,
-                        llvm::MDString::get(instrCtx, "pattern-start"));
-                inst.setMetadata("diffkemp.pattern", node);
-            } else if (inst.getOpcodeName() == std::string("add")) {
-                auto &instrCtx = inst.getContext();
-                llvm::MDNode *node = llvm::MDNode::get(
-                        instrCtx, llvm::MDString::get(instrCtx, "pattern-end"));
-                inst.setMetadata("diffkemp.pattern", node);
-            }
-        }
-    }
-    pattern->dump();
-    isFreshRun = false;
 }
 
 std::ostream &operator<<(std::ostream &os, PatternRepresentation &pat) {

@@ -11,11 +11,16 @@ void readPatternConfigImpl(std::string configPath) {
     auto buf = llvm::MemoryBuffer::getFile(configPath);
     llvm::yaml::Input yin(**buf);
     yin >> patterns;
+
     for (const auto &pattern : patterns) {
-        std::cout << pattern.name << std::endl;
         for (const auto &c : pattern.candidates) {
-            std::cout << c.function << std::endl;
+            if (!gPatternGen->addFunctionPairToPattern(
+                        std::make_pair(c.oldSnapshotPath, c.newSnapshotPath),
+                        std::make_pair(c.function, c.function),
+                        pattern.name)) {
+            }
         }
+        std::cout << *(*gPatternGen)[pattern.name] << std::endl;
     }
 }
 
@@ -24,7 +29,7 @@ void generatePatternV2(std::string pattern,
                        std::string second,
                        std::string f1,
                        std::string f2) {
-    auto passed = gPatternGen->addFunctionToPattern(
+    auto passed = gPatternGen->addFunctionPairToPattern(
             std::make_pair(first, second), std::make_pair(f1, f2), pattern);
     if (!passed) {
         std::cout << "error: failed misserably" << std::endl;

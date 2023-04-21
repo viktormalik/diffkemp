@@ -2,8 +2,12 @@
 #define DIFFKEMP_SIMPLL_PATTERNGENERATOR_H
 
 #include "Config.h"
+#include "DebugInfo.h"
+#include "DifferentialFunctionComparator.h"
 #include "ModuleAnalysis.h"
+#include "Output.h"
 #include "Result.h"
+#include "passes/StructureSizeAnalysis.h"
 
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/Analysis/MemorySSAUpdater.h>
@@ -16,6 +20,7 @@
 #include <llvm/IRReader/IRReader.h>
 #include <llvm/Support/SourceMgr.h>
 #include <llvm/Support/YAMLTraits.h>
+#include <llvm/Support/raw_ostream.h>
 #include <llvm/Transforms/Utils/Cloning.h>
 
 using namespace llvm;
@@ -45,7 +50,7 @@ class PatternGenerator {
   public:
     /// By default there is no pattern, hence it should be initialized to
     /// a nullptr.
-    PatternGenerator() : firstCtx(), secondCtx(), isFreshRun(true){};
+    PatternGenerator() : firstCtx(), secondCtx(){};
 
     virtual ~PatternGenerator() = default;
 
@@ -53,7 +58,12 @@ class PatternGenerator {
                              std::string funcName,
                              std::string fileName);
 
-    [[nodiscard]] bool addFunctionToPattern(
+    bool addFunctionToPattern(Module *mod,
+                              Function *PaternFun,
+                              Function *CandidateFun,
+                              std::string patterName);
+
+    [[nodiscard]] bool addFunctionPairToPattern(
             std::pair<std::string, std::string> moduleFiles,
             std::pair<std::string, std::string> funNames,
             std::string patternName);
@@ -70,16 +80,17 @@ class PatternGenerator {
     /// This has to be mutable in order to pass it to llvm::parseIRFile
     mutable LLVMContext firstCtx;
     mutable LLVMContext secondCtx;
-    mutable bool isFreshRun;
     mutable std::map<std::string, std::unique_ptr<PatternRepresentation>>
             patterns;
+
+    // DifferentialFunctionComparator diffFunComp;
+    void attachMetadata(Instruction *instr, std::string metadataStr);
 
     Function *cloneFunction(Function *, Function *);
 };
 
 struct PatternCandidate {
     std::string function{""};
-    std::string alias{""};
     std::string oldSnapshotPath;
     std::string newSnapshotPath;
 };
