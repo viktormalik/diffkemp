@@ -4,16 +4,8 @@ Python interface for the SimpLL library.
 from diffkemp.simpll.simpll_lib import ffi, lib
 
 
-def run_generate_pattern(function, files):
-    func = ffi.new("char []", function.encode("ascii"))
-    for file in files:
-        file = ffi.new("char []", file.encode("ascii"))
-        lib.runGeneratePattern(func, file)
-    lib.reportPattern()
-
-
-def run_pattern_info(path):
-    lib.readPatternConfig(ffi.new("char []", path.encode("ascii")))
+def run_generate_pattern(path):
+    lib.runGeneratePattern(ffi.new("char []", path.encode("ascii")))
 
 
 def _ptrarray_to_list(ptrarray):

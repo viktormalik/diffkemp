@@ -8,7 +8,7 @@ from diffkemp.llvm_ir.source_tree import SourceTree, SourceNotFoundException
 from diffkemp.llvm_ir.llvm_module import LlvmParam, LlvmModule
 from diffkemp.llvm_ir.single_llvm_finder import SingleLlvmFinder
 from diffkemp.llvm_ir.wrapper_build_finder import WrapperBuildFinder
-from diffkemp.simpll.library import run_generate_pattern, run_pattern_info
+from diffkemp.simpll.library import run_generate_pattern
 from diffkemp.semdiff.caching import SimpLLCache
 from diffkemp.semdiff.pattern_config import PatternConfig
 from diffkemp.semdiff.function_diff import functions_diff
@@ -32,9 +32,7 @@ def run_from_cli():
 
 def generate(args):
     if args.pattern_config:
-        run_pattern_info(args.pattern_config)
-    else:
-        run_generate_pattern(args.function, args.diff_chunks)
+        run_generate_pattern(args.pattern_config)
 
 
 def build(args):

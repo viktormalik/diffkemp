@@ -21,16 +21,16 @@ def make_argument_parser():
         "-c",
         required=False,
         help="function for which we are generating pattern")
-    generate_ap.add_argument(
-        "--function",
-        "-f",
-        required=False,
-        help="function for which we are generating pattern")
-    generate_ap.add_argument("diff_chunks",
-                             metavar="DIFF CHUNKS",
-                             help="diff chunks from which new pattern should\
-                             be infered",
-                             nargs="+")
+    # generate_ap.add_argument(
+    #     "--function",
+    #     "-f",
+    #     required=False,
+    #     help="function for which we are generating pattern")
+    # generate_ap.add_argument("diff_chunks",
+    #                          metavar="DIFF CHUNKS",
+    #                          help="diff chunks from which new pattern should\
+    #                          be infered",
+    #                          nargs="*")
     generate_ap.set_defaults(func=diffkemp.diffkemp.generate)
 
     # "build" sub-command

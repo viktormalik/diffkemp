@@ -129,9 +129,7 @@ int main(int argc, const char **argv) {
     // if pattern function options is not empty, then we are using the
     // pattern subcommand
     if (PatternSubCommnad) {
-        for (const auto &file : PatternFiles) {
-            generatePattern(PatternFunctionOpt, file, "");
-        }
+        readPatternConfig("Runtime/pattern_config.yaml");
     } else {
         // Parse --fun option
         auto FunName = parseFunOption();
