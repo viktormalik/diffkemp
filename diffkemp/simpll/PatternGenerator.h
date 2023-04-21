@@ -74,4 +74,29 @@ struct PatternInfo {
     std::vector<PatternCandidate> candidates;
 };
 
+namespace llvm {
+namespace yaml {
+template <> struct MappingTraits<PatternCandidate> {
+    static void mapping(IO &io, PatternCandidate &candidate) {
+        io.mapRequired("name", candidate.function);
+        io.mapRequired("old_snapshot_path", candidate.oldSnapshotPath);
+        io.mapRequired("new_snapshot_path", candidate.newSnapshotPath);
+    }
+};
+} // namespace yaml
+} // namespace llvm
+LLVM_YAML_IS_SEQUENCE_VECTOR(PatternCandidate);
+
+namespace llvm {
+namespace yaml {
+template <> struct MappingTraits<PatternInfo> {
+    static void mapping(IO &io, PatternInfo &info) {
+        io.mapRequired("name", info.name);
+        io.mapRequired("candidates", info.candidates);
+    }
+};
+} // namespace yaml
+} // namespace llvm
+LLVM_YAML_IS_SEQUENCE_VECTOR(PatternInfo);
+
 #endif // DIFFKEMP_SIMPLL_PATTERNGENERATOR_H

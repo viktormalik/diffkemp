@@ -151,35 +151,3 @@ std::ostream &operator<<(std::ostream &os,
     os << "Pattern Generator";
     return os;
 }
-
-/// YAML mappings
-/// I am starting to think, that those are going to be not needed as I could
-/// invoke them in python, because it does not make a sense in C++ code.
-
-using namespace llvm::yaml;
-
-namespace llvm {
-namespace yaml {
-template <> struct MappingTraits<PatternCandidate> {
-    static void mapping(IO &io, PatternCandidate &candidate) {
-        io.mapRequired("name", candidate.function);
-        io.mapOptional("alias", candidate.alias);
-        io.mapRequired("old_snapshot_path", candidate.oldSnapshotPath);
-        io.mapRequired("new_snapshot_path", candidate.newSnapshotPath);
-    }
-};
-} // namespace yaml
-} // namespace llvm
-LLVM_YAML_IS_SEQUENCE_VECTOR(PatternCandidate);
-
-namespace llvm {
-namespace yaml {
-template <> struct MappingTraits<PatternInfo> {
-    static void mapping(IO &io, PatternInfo &info) {
-        io.mapRequired("name", info.name);
-        io.mapRequired("candidates", info.candidates);
-    }
-};
-} // namespace yaml
-} // namespace llvm
-LLVM_YAML_IS_SEQUENCE_VECTOR(PatternInfo);
