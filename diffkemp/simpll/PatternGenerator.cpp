@@ -148,8 +148,10 @@ void PatternGenerator::addFileForInference(std::string patternName,
     isFreshRun = false;
 }
 
-std::ostream &operator<<(std::ostream &os,
-                         [[maybe_unused]] PatternGenerator &pg) {
-    os << "Pattern Generator";
+std::ostream &operator<<(std::ostream &os, PatternRepresentation &pat) {
+    std::string tmpStr;
+    raw_string_ostream tmp(tmpStr);
+    tmp << *(pat.mod);
+    os << tmpStr;
     return os;
 }

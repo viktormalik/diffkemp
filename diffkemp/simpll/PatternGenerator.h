@@ -58,7 +58,9 @@ class PatternGenerator {
             std::pair<std::string, std::string> funNames,
             std::string patternName);
 
-    friend std::ostream &operator<<(std::ostream &os, PatternGenerator &pg);
+    PatternRepresentation *operator[](std::string patternName) {
+        return patterns[patternName].get();
+    }
 
   private:
     /// Config is needed for invocation of DifferentialFunctionComparator class
