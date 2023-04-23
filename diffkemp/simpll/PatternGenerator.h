@@ -34,9 +34,34 @@ using namespace llvm;
 class PatternRepresentation {
     friend std::ostream &operator<<(std::ostream &os,
                                     PatternRepresentation &pg);
+    friend class PatternGenerator;
 
   private:
+    /// This has to be predeclared, because public Module needs it for its
+    /// construction. But on the other hand, there is no reason to make the
+    /// context public.
     LLVMContext context;
+
+  public:
+    PatternRepresentation(std::string name,
+                          std::string funFirstName,
+                          std::string funSecondName)
+            : context(), mod(new Module(name, context)),
+              funNames(funFirstName, funSecondName),
+              functions(nullptr, nullptr),
+              MDMap({{PATTERN_START,
+                      MDNode::get(context,
+                                  MDString::get(context, "pattern-start"))},
+                     {PATTERN_END,
+                      MDNode::get(context,
+                                  MDString::get(context, "pattern-end"))}}){};
+    void refreshFunctions();
+
+    std::unique_ptr<Module> mod;
+    std::pair<std::string, std::string> funNames;
+    std::pair<Function *, Function *> functions;
+
+  private:
     enum Metadata {
         PATTERN_START,
         PATTERN_END,
@@ -46,26 +71,6 @@ class PatternRepresentation {
     };
     std::unordered_map<PatternRepresentation::Metadata, MDNode *> MDMap;
     bool MDSet{false};
-
-  public:
-    PatternRepresentation(std::string name,
-                          std::string funFirstName,
-                          std::string funSecondName)
-            : context(),
-              MDMap({{PATTERN_START,
-                      MDNode::get(context,
-                                  MDString::get(context, "pattern-start"))},
-                     {PATTERN_END,
-                      MDNode::get(context,
-                                  MDString::get(context, "pattern-end"))}}),
-              mod(new Module(name, context)),
-              funNames(funFirstName, funSecondName),
-              functions(nullptr, nullptr){};
-    std::unique_ptr<Module> mod;
-    std::pair<std::string, std::string> funNames;
-    std::pair<Function *, Function *> functions;
-    void refreshFunctions();
-    friend class PatternGenerator;
 };
 
 class PatternGenerator {
