@@ -1,48 +1,22 @@
 #include "PatternGenerator.h"
 
-void PatternGenerator::attachMetadata(Instruction *instr,
-                                      std::string metadataStr) {
-    // TODO: add some checking
-    auto &instrContext = instr->getContext();
-    MDNode *node =
-            MDNode::get(instrContext, MDString::get(instrContext, metadataStr));
-    instr->setMetadata("diffkemp.pattern", node);
+void PatternRepresentation::refreshFunctions() {
+    functions.first = mod->getFunction(funNames.first);
+    functions.second = mod->getFunction(funNames.second);
 }
 
-Function *PatternGenerator::cloneFunction(Function *dst, Function *src) {
-    llvm::ValueToValueMapTy tmpValueMap;
-    auto patternFuncArgIter = dst->arg_begin();
-    for (auto &arg : src->args()) {
-        patternFuncArgIter->setName(arg.getName());
-        tmpValueMap[&arg] = &(*patternFuncArgIter++);
-    }
-
-    llvm::SmallVector<llvm::ReturnInst *, 8> returns;
-    llvm::CloneFunctionInto(dst,
-                            src,
-                            tmpValueMap,
-                            llvm::CloneFunctionChangeType::DifferentModule,
-                            returns);
-    // check if failed
-    return dst;
-};
-
-bool PatternGenerator::addFunctionToPattern(Module *mod,
-                                            Function *PatternFun,
-                                            Function *CandidateFun,
-                                            std::string patternName) {
-    Config conf{PatternFun->getName().str(),
-                CandidateFun->getName().str(),
-                this->patterns[patternName]->mod.get(),
-                mod};
+static std::tuple<std::unique_ptr<ModuleComparator>,
+                  std::unique_ptr<DifferentialFunctionComparator>,
+                  std::unique_ptr<DebugInfo>>
+        createModCompAndDifferentialFunComp(Config &conf) {
     conf.refreshFunctions();
 
     std::set<const Function *> CalledFirst;
     std::set<const Function *> CalledSecond;
     auto DI = std::make_unique<DebugInfo>(*conf.First,
                                           *conf.Second,
-                                          PatternFun,
-                                          CandidateFun,
+                                          conf.FirstFun,
+                                          conf.SecondFun,
                                           CalledFirst,
                                           CalledSecond);
 
@@ -60,23 +34,186 @@ bool PatternGenerator::addFunctionToPattern(Module *mod,
                                                       StructDIMapL,
                                                       StructDIMapR);
 
-    if (!(conf.FirstFun && conf.SecondFun)) {
-        return false;
-    }
     auto diffComp = std::make_unique<DifferentialFunctionComparator>(
-            PatternFun,
-            CandidateFun,
+            conf.FirstFun,
+            conf.SecondFun,
             conf,
             DI.get(),
             &modComp.get()->Patterns,
             modComp.get());
 
+    return std::make_tuple(
+            std::move(modComp), std::move(diffComp), std::move(DI));
+}
+
+void PatternGenerator::determinePatternRange(PatternRepresentation *PatRep) {
+    Config conf{PatRep->functions.first->getName().str(),
+                PatRep->functions.second->getName().str(),
+                PatRep->mod.get(),
+                PatRep->mod.get()};
+
+    auto modCompAndDiffComp = createModCompAndDifferentialFunComp(conf);
+    auto modComp = std::move(std::get<0>(modCompAndDiffComp));
+    auto diffComp = std::move(std::get<1>(modCompAndDiffComp));
+
+    modComp->ComparedFuns.emplace(std::make_pair(conf.FirstFun, conf.SecondFun),
+                                  Result(conf.FirstFun, conf.SecondFun));
+
+    auto BBL = PatRep->functions.first->begin();
+    auto BBR = PatRep->functions.second->begin();
+    bool insidePatternValueRange = false;
+    while (BBL != PatRep->functions.first->end()
+           && BBR != PatRep->functions.second->end()) {
+        auto InL = BBL->begin();
+        auto InR = BBR->begin();
+        while (InL != BBL->end() || InR != BBR->end()) {
+            if (diffComp->maySkipInstruction(&(*InL))) {
+                InL++;
+                continue;
+            }
+            if (diffComp->maySkipInstruction(&(*InR))) {
+                InR++;
+                continue;
+            }
+
+            /// WARNING: This way of registration is really fishy, I should add
+            /// some kind of checking to it. Otherwise, I may not actually
+            /// catch some nasty bug.
+            if (diffComp->cmpOperationsWithOperands(&(*InL), &(*InR))) {
+                if (!insidePatternValueRange) { // and difference is in type
+                                                // or value
+                    InL->setMetadata(
+                            "diffkemp.pattern",
+                            PatRep->MDMap
+                                    [PatternRepresentation::PATTERN_START]);
+                    InR->setMetadata(
+                            PatRep->mod->getMDKindID("diffkemp.pattern"),
+                            PatRep->MDMap
+                                    [PatternRepresentation::PATTERN_START]);
+                    insidePatternValueRange = true;
+                }
+            }
+            if (insidePatternValueRange) {
+                if (InR->isTerminator()) {
+                    InR->setMetadata(
+                            PatRep->mod->getMDKindID("diffkemp.pattern"),
+                            PatRep->MDMap[PatternRepresentation::PATTERN_END]);
+                }
+                if (InL->isTerminator()) {
+                    InL->setMetadata(
+                            PatRep->mod->getMDKindID("diffkemp.pattern"),
+                            PatRep->MDMap[PatternRepresentation::PATTERN_END]);
+                }
+            }
+            InR++;
+            InL++;
+        }
+        BBR++;
+        BBL++;
+    }
+}
+
+bool isOpFunctionArg(Use &Op, Function &Fun) {
+    for (auto argIter = Fun.arg_begin(); argIter != Fun.arg_end(); ++argIter) {
+        if (Op.get() == argIter) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void PatternGenerator::attachMetadata(Instruction *instr,
+                                      std::string metadataStr) {
+    // TODO: add some checking
+    auto &instrContext = instr->getContext();
+    MDNode *node =
+            MDNode::get(instrContext, MDString::get(instrContext, metadataStr));
+    instr->setMetadata("diffkemp.pattern", node);
+}
+
+/// TODO: Make this one function
+/// TODO: Refactor me in accordance to FunctionType
+Function *PatternGenerator::cloneFunctionWithExtraArgument(Module *dstMod,
+                                                           Function *src,
+                                                           Type &newType) {
+    auto newFunTypeParams = src->getFunctionType()->params().vec();
+    newFunTypeParams.push_back(&newType);
+    auto newFunType =
+            FunctionType::get(src->getReturnType(), newFunTypeParams, false);
+    auto dst = Function::Create(
+            newFunType, src->getLinkage(), "tmp" + src->getName(), dstMod);
+    llvm::ValueToValueMapTy tmpValueMap;
+    auto patternFuncArgIter = dst->arg_begin();
+    for (auto &arg : src->args()) {
+        patternFuncArgIter->setName(arg.getName());
+        tmpValueMap[&arg] = &(*patternFuncArgIter++);
+    }
+
+    llvm::SmallVector<llvm::ReturnInst *, 8> returns;
+    llvm::CloneFunctionInto(dst,
+                            src,
+                            tmpValueMap,
+                            llvm::CloneFunctionChangeType::DifferentModule,
+                            returns);
+    /// We dont have to check for global variables, as they are already
+    /// initialized from pattern initialization.
+    return dst;
+};
+
+Function *PatternGenerator::cloneFunction(Function *dst, Function *src) {
+    llvm::ValueToValueMapTy tmpValueMap;
+    auto patternFuncArgIter = dst->arg_begin();
+    for (auto &arg : src->args()) {
+        patternFuncArgIter->setName(arg.getName());
+        tmpValueMap[&arg] = &(*patternFuncArgIter++);
+    }
+
+    llvm::SmallVector<llvm::ReturnInst *, 8> returns;
+    llvm::CloneFunctionInto(dst,
+                            src,
+                            tmpValueMap,
+                            llvm::CloneFunctionChangeType::DifferentModule,
+                            returns);
+    /// initialize global variables
+    for (auto &BB : *dst) {
+        for (auto &Inst : BB) {
+            for (auto &Op : Inst.operands()) {
+                if (auto *Global = dyn_cast<GlobalVariable>(Op)) {
+                    auto newGlobal = dst->getParent()->getOrInsertGlobal(
+                            Global->getName(), Global->getType());
+                    Op->replaceAllUsesWith(newGlobal);
+                }
+            }
+        }
+    }
+    // check if failed
+    return dst;
+};
+
+bool PatternGenerator::addFunctionToPattern(Module *mod,
+                                            Function *PatternFun,
+                                            Function *CandidateFun,
+                                            std::string patternName) {
+    Config conf{PatternFun->getName().str(),
+                CandidateFun->getName().str(),
+                this->patterns[patternName]->mod.get(),
+                mod};
+
+    auto modCompAndDiffComp = createModCompAndDifferentialFunComp(conf);
+    auto modComp = std::move(std::get<0>(modCompAndDiffComp));
+    auto diffComp = std::move(std::get<1>(modCompAndDiffComp));
+
     modComp->ComparedFuns.emplace(std::make_pair(PatternFun, CandidateFun),
                                   Result(PatternFun, CandidateFun));
 
+    /// Create a temporary function, that is going to be augmented, if inference
+    /// succeeds, then it is going to replace the PatternFun
+
     auto BBL = PatternFun->begin();
     auto BBR = CandidateFun->begin();
-    bool insidePatternValueRange = false;
+    Function *tmpFun = nullptr;
+    std::set<std::pair<Instruction *, Value *>> markedValues;
+    std::set<Value *> parametrizedValues;
     while (BBL != PatternFun->end() && BBR != CandidateFun->end()) {
         auto InL = BBL->begin();
         auto InR = BBR->begin();
@@ -90,21 +227,83 @@ bool PatternGenerator::addFunctionToPattern(Module *mod,
                 continue;
             }
 
-            if (diffComp->cmpOperationsWithOperands(&(*InL), &(*InR))) {
-                if (!insidePatternValueRange) { // and difference is in type
-                                                // or value
-                    attachMetadata(&(*InL), "pattern-start");
-                    attachMetadata(&(*InR), "pattern-start");
-                    insidePatternValueRange = true;
+            if (InL->getOpcode() != InR->getOpcode()) {
+                /// We cannot create a pattern from code snippets with differing
+                /// operations.
+                return false;
+            }
+            if (InL->getNumOperands() != InR->getNumOperands()) {
+                /// TODO: check if there is any operation with variatic number
+                /// of operands
+                return false;
+            }
+            for (auto &it : InL->operands()) {
+                if (isOpFunctionArg(it, *PatternFun)) {
+                    std::cout << "operand is a function argument" << std::endl;
                 }
-                std::cout << "Functions do differ" << std::endl;
-                // patterns lasts till the next non-differing
-                // instruction
-            } else {
-                if (insidePatternValueRange) {
-                    std::cout << "end of pattern range" << std::endl;
-                    attachMetadata(&(*InL), "pattern-end");
-                    attachMetadata(&(*InR), "pattern-end");
+            }
+            if (diffComp->cmpOperationsWithOperands(&(*InL), &(*InR))) {
+                /// Ignore call instructions, as they usually call to different
+                /// functions
+                if (dyn_cast<CallInst>(InL)) {
+                    ++InL, ++InR;
+                    continue;
+                }
+                /// Same operations shouldn't have different operands count
+                for (auto OpL = InL->op_begin(), OpR = InR->op_begin();
+                     OpL != InL->op_end() && OpR != InR->op_end();
+                     ++OpL, ++OpR) {
+                    if (OpL->get()->getType() != OpR->get()->getType()) {
+                        std::cout << "Not Implemented" << std::endl;
+                    } else {
+                        if (diffComp->cmpValues(OpL->get(), OpR->get())) {
+                            /// Value is already parametrized
+                            if (parametrizedValues.find(OpL->get())
+                                != parametrizedValues.end()) {
+                                std::cout << "already parametrized"
+                                          << std::endl;
+                                continue;
+                            }
+                            /// difference is in the value
+                            /// Marked for future copy
+                            auto pp = std::make_pair(&(*InL), OpL->get());
+                            if (isOpFunctionArg(*OpL, *PatternFun)
+                                || std::find(markedValues.begin(),
+                                             markedValues.end(),
+                                             pp)
+                                           != markedValues.end()) {
+                                std::cout << "parametrized twice, man"
+                                          << std::endl;
+                                continue;
+                            }
+                            if (tmpFun) {
+                                tmpFun = cloneFunctionWithExtraArgument(
+                                        tmpFun->getParent(),
+                                        tmpFun,
+                                        *OpL->get()->getType());
+                            } else {
+                                tmpFun = cloneFunctionWithExtraArgument(
+                                        PatternFun->getParent(),
+                                        PatternFun,
+                                        *OpL->get()->getType());
+                            }
+                            // Skip if operand is a global variable
+                            bool shouldContinue = false;
+                            for (auto &Global :
+                                 PatternFun->getParent()->globals()) {
+                                if (OpL->get()->getValueID()
+                                    == Global.getValueID()) {
+                                    shouldContinue = true;
+                                }
+                            }
+                            if (shouldContinue) {
+                                continue;
+                            }
+                            markedValues.insert(
+                                    std::make_pair(&(*InL), OpL->get()));
+                            parametrizedValues.insert(OpL->get());
+                        }
+                    }
                 }
             }
             InR++;
@@ -113,6 +312,32 @@ bool PatternGenerator::addFunctionToPattern(Module *mod,
         BBR++;
         BBL++;
     }
+    if (tmpFun) {
+        for (BBL = PatternFun->begin(), BBR = tmpFun->begin();
+             BBL != PatternFun->end();
+             ++BBL, ++BBR) {
+            for (auto InL = BBL->begin(), InR = BBR->begin(); InL != BBL->end();
+                 ++InL, ++InR) {
+                for (auto &value : markedValues) {
+                    if (value.first == &(*InL)) {
+                        for (auto OpL = InL->op_begin(), OpR = InR->op_begin();
+                             OpL != InL->op_end() && OpR != InR->op_end();
+                             ++OpL, ++OpR) {
+                            if (OpL->get() == value.second) {
+                                auto ArgIter = tmpFun->arg_end();
+                                --ArgIter;
+                                OpR->get()->replaceAllUsesWith(ArgIter);
+                            }
+                        }
+                    }
+                }
+                InR->copyMetadata(*InL);
+            }
+        }
+        auto pastFunName = PatternFun->getName();
+        PatternFun->eraseFromParent();
+        tmpFun->setName(pastFunName);
+    }
     return true;
 }
 
@@ -120,8 +345,6 @@ bool PatternGenerator::addFunctionPairToPattern(
         std::pair<std::string, std::string> moduleFiles,
         std::pair<std::string, std::string> funNames,
         std::string patternName) {
-
-    std::cout << "Process of adding function to a pattern" << std::endl;
 
     llvm::SMDiagnostic err;
     std::unique_ptr<Module> ModL(parseIRFile(moduleFiles.first, err, firstCtx));
@@ -139,27 +362,62 @@ bool PatternGenerator::addFunctionPairToPattern(
         return false;
     }
 
+    /// This pattern is not yet initialized, and we have to initialize it by
+    /// copying module functions to it.
     if (this->patterns.find(patternName) == this->patterns.end()) {
-        this->patterns[patternName] =
-                std::make_unique<PatternRepresentation>(patternName);
+        this->patterns[patternName] = std::make_unique<PatternRepresentation>(
+                patternName,
+                ("diffkemp.old." + FunL->getName()).str(),
+                ("diffkemp.new." + FunR->getName()).str());
         auto PatternRepr = this->patterns[patternName].get();
-        PatternRepr->functions.first = cloneFunction(
-                Function::Create(FunL->getFunctionType(),
-                                 FunL->getLinkage(),
-                                 "diffkemp.old." + FunL->getName(),
-                                 PatternRepr->mod.get()),
-                FunL);
-        PatternRepr->functions.second = cloneFunction(
-                Function::Create(FunR->getFunctionType(),
-                                 FunR->getLinkage(),
-                                 "diffkemp.new." + FunR->getName(),
-                                 PatternRepr->mod.get()),
-                FunR);
-        std::cout << *PatternRepr << std::endl;
+        PatternRepr->functions.first =
+                cloneFunction(Function::Create(FunL->getFunctionType(),
+                                               FunL->getLinkage(),
+                                               PatternRepr->funNames.first,
+                                               PatternRepr->mod.get()),
+                              FunL);
+        PatternRepr->functions.second =
+                cloneFunction(Function::Create(FunR->getFunctionType(),
+                                               FunR->getLinkage(),
+                                               PatternRepr->funNames.second,
+                                               PatternRepr->mod.get()),
+                              FunR);
+
+        auto attrs = AttributeList();
+        PatternRepr->functions.first->setAttributes(attrs);
+        PatternRepr->functions.second->setAttributes(attrs);
+
+        /// Provide all necessary function calls, that are needed for the
+        /// pattern to be valid
+        for (auto &BB : *PatternRepr->functions.first) {
+            for (auto &Inst : BB) {
+                if (auto call = dyn_cast<CallInst>(&Inst)) {
+                    auto calledFun = call->getCalledFunction();
+                    call->setCalledFunction(Function::Create(
+                            calledFun->getFunctionType(),
+                            calledFun->getLinkage(),
+                            "diffkemp.old." + calledFun->getName(),
+                            PatternRepr->mod.get()));
+                }
+            }
+        }
+        for (auto &BB : *PatternRepr->functions.second) {
+            for (auto &Inst : BB) {
+                if (auto call = dyn_cast<CallInst>(&Inst)) {
+                    auto calledFun = call->getCalledFunction();
+                    call->setCalledFunction(Function::Create(
+                            calledFun->getFunctionType(),
+                            calledFun->getLinkage(),
+                            "diffkemp.new." + calledFun->getName(),
+                            PatternRepr->mod.get()));
+                }
+            }
+        }
         /// Pattern was empty, hence provided functions are the most
         /// specific pattern that we can infere, thus generation have
         /// been successful and we are returning true.
         // TODO: Uncomment me for final version
+        this->determinePatternRange(this->patterns[patternName].get());
         return true;
     }
 
@@ -173,8 +431,8 @@ bool PatternGenerator::addFunctionPairToPattern(
             this->patterns[patternName]->functions.second,
             FunR,
             patternName);
-
-    std::cout << *(this->patterns[patternName]) << std::endl;
+    this->patterns[patternName]->refreshFunctions();
+    this->determinePatternRange(this->patterns[patternName].get());
 
     if (!resultL || !resultR) {
         return false;

@@ -37,13 +37,35 @@ class PatternRepresentation {
 
   private:
     LLVMContext context;
+    enum Metadata {
+        PATTERN_START,
+        PATTERN_END,
+        DISSABLE_NAME_COMPARISON,
+        GROUP_START,
+        GROUP_END,
+    };
+    std::unordered_map<PatternRepresentation::Metadata, MDNode *> MDMap;
+    bool MDSet{false};
 
   public:
-    PatternRepresentation(std::string name)
-            : context(), mod(new Module(name, context)),
+    PatternRepresentation(std::string name,
+                          std::string funFirstName,
+                          std::string funSecondName)
+            : context(),
+              MDMap({{PATTERN_START,
+                      MDNode::get(context,
+                                  MDString::get(context, "pattern-start"))},
+                     {PATTERN_END,
+                      MDNode::get(context,
+                                  MDString::get(context, "pattern-end"))}}),
+              mod(new Module(name, context)),
+              funNames(funFirstName, funSecondName),
               functions(nullptr, nullptr){};
     std::unique_ptr<Module> mod;
+    std::pair<std::string, std::string> funNames;
     std::pair<Function *, Function *> functions;
+    void refreshFunctions();
+    friend class PatternGenerator;
 };
 
 class PatternGenerator {
@@ -85,7 +107,11 @@ class PatternGenerator {
 
     // DifferentialFunctionComparator diffFunComp;
     void attachMetadata(Instruction *instr, std::string metadataStr);
+    void determinePatternRange(PatternRepresentation *PatRep);
 
+    Function *cloneFunctionWithExtraArgument(Module *dstMod,
+                                             Function *src,
+                                             Type &newType);
     Function *cloneFunction(Function *, Function *);
 };
 
