@@ -5,45 +5,33 @@ void PatternRepresentation::refreshFunctions() {
     functions.second = mod->getFunction(funNames.second);
 }
 
-static std::tuple<std::unique_ptr<ModuleComparator>,
-                  std::unique_ptr<DifferentialFunctionComparator>,
-                  std::unique_ptr<DebugInfo>>
-        createModCompAndDifferentialFunComp(Config &conf) {
+PatternGenerator::MinimalModuleAnalysis::MinimalModuleAnalysis(Config &conf) {
     conf.refreshFunctions();
-
-    std::set<const Function *> CalledFirst;
-    std::set<const Function *> CalledSecond;
-    auto DI = std::make_unique<DebugInfo>(*conf.First,
+    /// All of these are not inside of the member initializer list,
+    /// because we want to be sure, that functions are refreshed in
+    /// conf.
+    dbgInfo = std::make_unique<DebugInfo>(*conf.First,
                                           *conf.Second,
                                           conf.FirstFun,
                                           conf.SecondFun,
                                           CalledFirst,
                                           CalledSecond);
-
-    StructureSizeAnalysis::Result StructSizeMapL;
-    StructureSizeAnalysis::Result StructSizeMapR;
-    StructureDebugInfoAnalysis::Result StructDIMapL;
-    StructureDebugInfoAnalysis::Result StructDIMapR;
-
-    auto modComp = std::make_unique<ModuleComparator>(*conf.First,
-                                                      *conf.Second,
-                                                      conf,
-                                                      DI.get(),
-                                                      StructSizeMapL,
-                                                      StructSizeMapR,
-                                                      StructDIMapL,
-                                                      StructDIMapR);
-
-    auto diffComp = std::make_unique<DifferentialFunctionComparator>(
+    modComp = std::make_unique<ModuleComparator>(*conf.First,
+                                                 *conf.Second,
+                                                 conf,
+                                                 dbgInfo.get(),
+                                                 StructSizeMapL,
+                                                 StructSizeMapR,
+                                                 StructDIMapL,
+                                                 StructDIMapR);
+    diffComp = std::make_unique<DifferentialFunctionComparator>(
             conf.FirstFun,
             conf.SecondFun,
             conf,
-            DI.get(),
+            dbgInfo.get(),
             &modComp.get()->Patterns,
             modComp.get());
-
-    return std::make_tuple(
-            std::move(modComp), std::move(diffComp), std::move(DI));
+    addFunPair(std::make_pair(conf.FirstFun, conf.SecondFun));
 }
 
 void PatternGenerator::determinePatternRange(PatternRepresentation *PatRep) {
@@ -52,12 +40,7 @@ void PatternGenerator::determinePatternRange(PatternRepresentation *PatRep) {
                 PatRep->mod.get(),
                 PatRep->mod.get()};
 
-    auto modCompAndDiffComp = createModCompAndDifferentialFunComp(conf);
-    auto modComp = std::move(std::get<0>(modCompAndDiffComp));
-    auto diffComp = std::move(std::get<1>(modCompAndDiffComp));
-
-    modComp->ComparedFuns.emplace(std::make_pair(conf.FirstFun, conf.SecondFun),
-                                  Result(conf.FirstFun, conf.SecondFun));
+    auto semDiff = MinimalModuleAnalysis(conf);
 
     auto BBL = PatRep->functions.first->begin();
     auto BBR = PatRep->functions.second->begin();
@@ -67,11 +50,11 @@ void PatternGenerator::determinePatternRange(PatternRepresentation *PatRep) {
         auto InL = BBL->begin();
         auto InR = BBR->begin();
         while (InL != BBL->end() || InR != BBR->end()) {
-            if (diffComp->maySkipInstruction(&(*InL))) {
+            if (semDiff->maySkipInstruction(&(*InL))) {
                 InL++;
                 continue;
             }
-            if (diffComp->maySkipInstruction(&(*InR))) {
+            if (semDiff->maySkipInstruction(&(*InR))) {
                 InR++;
                 continue;
             }
@@ -79,7 +62,7 @@ void PatternGenerator::determinePatternRange(PatternRepresentation *PatRep) {
             /// WARNING: This way of registration is really fishy, I should add
             /// some kind of checking to it. Otherwise, I may not actually
             /// catch some nasty bug.
-            if (diffComp->cmpOperationsWithOperands(&(*InL), &(*InR))) {
+            if (semDiff->cmpOperationsWithOperands(&(*InL), &(*InR))) {
                 if (!insidePatternValueRange) { // and difference is in type
                                                 // or value
                     InL->setMetadata(
@@ -198,13 +181,7 @@ bool PatternGenerator::addFunctionToPattern(Module *mod,
                 CandidateFun->getName().str(),
                 this->patterns[patternName]->mod.get(),
                 mod};
-
-    auto modCompAndDiffComp = createModCompAndDifferentialFunComp(conf);
-    auto modComp = std::move(std::get<0>(modCompAndDiffComp));
-    auto diffComp = std::move(std::get<1>(modCompAndDiffComp));
-
-    modComp->ComparedFuns.emplace(std::make_pair(PatternFun, CandidateFun),
-                                  Result(PatternFun, CandidateFun));
+    auto semDiff = MinimalModuleAnalysis(conf);
 
     /// Create a temporary function, that is going to be augmented, if inference
     /// succeeds, then it is going to replace the PatternFun
@@ -218,11 +195,11 @@ bool PatternGenerator::addFunctionToPattern(Module *mod,
         auto InL = BBL->begin();
         auto InR = BBR->begin();
         while (InL != BBL->end() || InR != BBR->end()) {
-            if (diffComp->maySkipInstruction(&(*InL))) {
+            if (semDiff->maySkipInstruction(&(*InL))) {
                 InL++;
                 continue;
             }
-            if (diffComp->maySkipInstruction(&(*InR))) {
+            if (semDiff->maySkipInstruction(&(*InR))) {
                 InR++;
                 continue;
             }
@@ -242,7 +219,7 @@ bool PatternGenerator::addFunctionToPattern(Module *mod,
                     std::cout << "operand is a function argument" << std::endl;
                 }
             }
-            if (diffComp->cmpOperationsWithOperands(&(*InL), &(*InR))) {
+            if (semDiff->cmpOperationsWithOperands(&(*InL), &(*InR))) {
                 /// Ignore call instructions, as they usually call to different
                 /// functions
                 if (dyn_cast<CallInst>(InL)) {
@@ -256,7 +233,7 @@ bool PatternGenerator::addFunctionToPattern(Module *mod,
                     if (OpL->get()->getType() != OpR->get()->getType()) {
                         std::cout << "Not Implemented" << std::endl;
                     } else {
-                        if (diffComp->cmpValues(OpL->get(), OpR->get())) {
+                        if (semDiff->cmpValues(OpL->get(), OpR->get())) {
                             /// Value is already parametrized
                             if (parametrizedValues.find(OpL->get())
                                 != parametrizedValues.end()) {

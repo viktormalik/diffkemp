@@ -95,6 +95,31 @@ class PatternGenerator {
     }
 
   private:
+    class MinimalModuleAnalysis {
+      public:
+        DifferentialFunctionComparator *operator->() const {
+            return diffComp.get();
+        }
+        inline void addFunPair(std::pair<Function *, Function *> fPair) {
+            modComp->ComparedFuns.emplace(fPair,
+                                          Result(fPair.first, fPair.second));
+        }
+        MinimalModuleAnalysis(Config &conf);
+
+      private:
+        std::unique_ptr<DebugInfo> dbgInfo;
+        std::unique_ptr<ModuleComparator> modComp;
+        std::unique_ptr<DifferentialFunctionComparator> diffComp;
+
+        /// Objects needed for creation of minimal ModuleAnalysis, they are
+        /// initialized inline, because we want them to have default values.
+        std::set<const Function *> CalledFirst{};
+        std::set<const Function *> CalledSecond{};
+        StructureSizeAnalysis::Result StructSizeMapL{};
+        StructureSizeAnalysis::Result StructSizeMapR{};
+        StructureDebugInfoAnalysis::Result StructDIMapL{};
+        StructureDebugInfoAnalysis::Result StructDIMapR{};
+    };
     /// Config is needed for invocation of DifferentialFunctionComparator class
     /// But it is going to be initialized everytime new function in the pattern
     /// config is found.
