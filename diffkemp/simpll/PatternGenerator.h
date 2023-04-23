@@ -142,7 +142,7 @@ class PatternGenerator {
     Function *cloneFunctionWithExtraArgument(Module *dstMod,
                                              Function *src,
                                              Type &newType);
-    Function *cloneFunction(Function *, Function *);
+    Function *cloneFunction(std::string prefix, Module *dstMod, Function *src);
 };
 
 struct PatternCandidate {

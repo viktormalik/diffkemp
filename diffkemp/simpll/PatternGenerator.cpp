@@ -143,7 +143,13 @@ Function *PatternGenerator::cloneFunctionWithExtraArgument(Module *dstMod,
     return dst;
 };
 
-Function *PatternGenerator::cloneFunction(Function *dst, Function *src) {
+Function *PatternGenerator::cloneFunction(std::string prefix,
+                                          Module *mod,
+                                          Function *src) {
+    auto dst = Function::Create(src->getFunctionType(),
+                                src->getLinkage(),
+                                prefix + src->getName().str(),
+                                mod);
     llvm::ValueToValueMapTy tmpValueMap;
     auto patternFuncArgIter = dst->arg_begin();
     for (auto &arg : src->args()) {
@@ -157,6 +163,8 @@ Function *PatternGenerator::cloneFunction(Function *dst, Function *src) {
                             tmpValueMap,
                             llvm::CloneFunctionChangeType::DifferentModule,
                             returns);
+    /// TODO: check if failed
+
     /// initialize global variables
     for (auto &BB : *dst) {
         for (auto &Inst : BB) {
@@ -169,7 +177,19 @@ Function *PatternGenerator::cloneFunction(Function *dst, Function *src) {
             }
         }
     }
-    // check if failed
+    /// Provide declaration of used functions
+    for (auto &BB : *dst) {
+        for (auto &Inst : BB) {
+            if (auto call = dyn_cast<CallInst>(&Inst)) {
+                auto calledFun = call->getCalledFunction();
+                call->setCalledFunction(
+                        Function::Create(calledFun->getFunctionType(),
+                                         calledFun->getLinkage(),
+                                         prefix + calledFun->getName(),
+                                         dst->getParent()));
+            }
+        }
+    }
     return dst;
 };
 
@@ -348,48 +368,14 @@ bool PatternGenerator::addFunctionPairToPattern(
                 ("diffkemp.new." + FunR->getName()).str());
         auto PatternRepr = this->patterns[patternName].get();
         PatternRepr->functions.first =
-                cloneFunction(Function::Create(FunL->getFunctionType(),
-                                               FunL->getLinkage(),
-                                               PatternRepr->funNames.first,
-                                               PatternRepr->mod.get()),
-                              FunL);
+                cloneFunction("diffkemp.old.", PatternRepr->mod.get(), FunL);
         PatternRepr->functions.second =
-                cloneFunction(Function::Create(FunR->getFunctionType(),
-                                               FunR->getLinkage(),
-                                               PatternRepr->funNames.second,
-                                               PatternRepr->mod.get()),
-                              FunR);
+                cloneFunction("diffkemp.new.", PatternRepr->mod.get(), FunR);
 
         auto attrs = AttributeList();
         PatternRepr->functions.first->setAttributes(attrs);
         PatternRepr->functions.second->setAttributes(attrs);
 
-        /// Provide all necessary function calls, that are needed for the
-        /// pattern to be valid
-        for (auto &BB : *PatternRepr->functions.first) {
-            for (auto &Inst : BB) {
-                if (auto call = dyn_cast<CallInst>(&Inst)) {
-                    auto calledFun = call->getCalledFunction();
-                    call->setCalledFunction(Function::Create(
-                            calledFun->getFunctionType(),
-                            calledFun->getLinkage(),
-                            "diffkemp.old." + calledFun->getName(),
-                            PatternRepr->mod.get()));
-                }
-            }
-        }
-        for (auto &BB : *PatternRepr->functions.second) {
-            for (auto &Inst : BB) {
-                if (auto call = dyn_cast<CallInst>(&Inst)) {
-                    auto calledFun = call->getCalledFunction();
-                    call->setCalledFunction(Function::Create(
-                            calledFun->getFunctionType(),
-                            calledFun->getLinkage(),
-                            "diffkemp.new." + calledFun->getName(),
-                            PatternRepr->mod.get()));
-                }
-            }
-        }
         /// Pattern was empty, hence provided functions are the most
         /// specific pattern that we can infere, thus generation have
         /// been successful and we are returning true.
