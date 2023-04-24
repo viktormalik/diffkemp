@@ -239,63 +239,63 @@ bool PatternGenerator::addFunctionToPattern(Module *mod,
                     std::cout << "operand is a function argument" << std::endl;
                 }
             }
-            if (semDiff->cmpOperationsWithOperands(&(*InL), &(*InR))) {
-                /// Ignore call instructions, as they usually call to different
-                /// functions
-                if (dyn_cast<CallInst>(InL)) {
-                    ++InL, ++InR;
-                    continue;
-                }
-                /// Same operations shouldn't have different operands count
-                for (auto OpL = InL->op_begin(), OpR = InR->op_begin();
-                     OpL != InL->op_end() && OpR != InR->op_end();
-                     ++OpL, ++OpR) {
-                    if (OpL->get()->getType() != OpR->get()->getType()) {
-                        std::cout << "Not Implemented" << std::endl;
-                    } else {
-                        if (semDiff->cmpValues(OpL->get(), OpR->get())) {
-                            /// Value is already parametrized
-                            if (parametrizedValues.find(OpL->get())
-                                != parametrizedValues.end()) {
-                                std::cout << "already parametrized"
-                                          << std::endl;
-                                continue;
-                            }
-                            /// difference is in the value
-                            /// Marked for future copy
-                            auto pp = std::make_pair(&(*InL), OpL->get());
-                            if (isOpFunctionArg(*OpL, *PatternFun)
-                                || std::find(markedValues.begin(),
-                                             markedValues.end(),
-                                             pp)
-                                           != markedValues.end()) {
-                                std::cout << "parametrized twice, man"
-                                          << std::endl;
-                                continue;
-                            }
-                            if (tmpFun) {
-                                tmpFun = cloneFunctionWithExtraArgument(
-                                        tmpFun->getParent(),
-                                        tmpFun,
-                                        *OpL->get()->getType());
-                            } else {
-                                tmpFun = cloneFunctionWithExtraArgument(
-                                        PatternFun->getParent(),
-                                        PatternFun,
-                                        *OpL->get()->getType());
-                            }
-                            // Skip if operand is a global variable
-                            if (isValueGlobal(*OpL->get(),
-                                              *PatternFun->getParent())) {
-                                std::cout << "different value is global, that "
-                                             "is handled differently"
-                                          << std::endl;
-                                continue;
-                            }
-                            markedValues.insert(
-                                    std::make_pair(&(*InL), OpL->get()));
-                            parametrizedValues.insert(OpL->get());
+            if (!semDiff->cmpOperationsWithOperands(&(*InL), &(*InR))) {
+                ++InL, ++InR;
+                continue;
+            }
+            /// Ignore call instructions, as they usually call to different
+            /// functions
+            if (dyn_cast<CallInst>(InL)) {
+                ++InL, ++InR;
+                continue;
+            }
+            /// Same operations shouldn't have different operands count
+            for (auto OpL = InL->op_begin(), OpR = InR->op_begin();
+                 OpL != InL->op_end() && OpR != InR->op_end();
+                 ++OpL, ++OpR) {
+                if (OpL->get()->getType() != OpR->get()->getType()) {
+                    std::cout << "Not Implemented" << std::endl;
+                } else {
+                    if (semDiff->cmpValues(OpL->get(), OpR->get())) {
+                        /// Value is already parametrized
+                        if (parametrizedValues.find(OpL->get())
+                            != parametrizedValues.end()) {
+                            std::cout << "already parametrized" << std::endl;
+                            continue;
                         }
+                        /// difference is in the value
+                        /// Marked for future copy
+                        auto pp = std::make_pair(&(*InL), OpL->get());
+                        if (isOpFunctionArg(*OpL, *PatternFun)
+                            || std::find(markedValues.begin(),
+                                         markedValues.end(),
+                                         pp)
+                                       != markedValues.end()) {
+                            std::cout << "parametrized twice, man" << std::endl;
+                            continue;
+                        }
+                        if (tmpFun) {
+                            tmpFun = cloneFunctionWithExtraArgument(
+                                    tmpFun->getParent(),
+                                    tmpFun,
+                                    *OpL->get()->getType());
+                        } else {
+                            tmpFun = cloneFunctionWithExtraArgument(
+                                    PatternFun->getParent(),
+                                    PatternFun,
+                                    *OpL->get()->getType());
+                        }
+                        // Skip if operand is a global variable
+                        if (isValueGlobal(*OpL->get(),
+                                          *PatternFun->getParent())) {
+                            std::cout << "different value is global, that "
+                                         "is handled differently"
+                                      << std::endl;
+                            continue;
+                        }
+                        markedValues.insert(
+                                std::make_pair(&(*InL), OpL->get()));
+                        parametrizedValues.insert(OpL->get());
                     }
                 }
             }
