@@ -285,15 +285,11 @@ bool PatternGenerator::addFunctionToPattern(Module *mod,
                                         *OpL->get()->getType());
                             }
                             // Skip if operand is a global variable
-                            bool shouldContinue = false;
-                            for (auto &Global :
-                                 PatternFun->getParent()->globals()) {
-                                if (OpL->get()->getValueID()
-                                    == Global.getValueID()) {
-                                    shouldContinue = true;
-                                }
-                            }
-                            if (shouldContinue) {
+                            if (isValueGlobal(*OpL->get(),
+                                              *PatternFun->getParent())) {
+                                std::cout << "different value is global, that "
+                                             "is handled differently"
+                                          << std::endl;
                                 continue;
                             }
                             markedValues.insert(
@@ -401,6 +397,15 @@ bool PatternGenerator::addFunctionPairToPattern(
         return false;
     }
     return true;
+}
+
+bool PatternGenerator::isValueGlobal(Value &val, Module &mod) {
+    for (auto &global : mod.globals()) {
+        if (val.getValueID() == global.getValueID()) {
+            return true;
+        }
+    }
+    return false;
 }
 
 std::ostream &operator<<(std::ostream &os, PatternRepresentation &pat) {

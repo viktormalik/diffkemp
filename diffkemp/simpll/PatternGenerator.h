@@ -143,6 +143,8 @@ class PatternGenerator {
                                              Function *src,
                                              Type &newType);
     Function *cloneFunction(std::string prefix, Module *dstMod, Function *src);
+
+    bool isValueGlobal(Value &val, Module &mod);
 };
 
 struct PatternCandidate {
