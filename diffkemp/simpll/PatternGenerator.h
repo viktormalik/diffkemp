@@ -52,6 +52,28 @@ class StructTypeRemapper : public ValueMapTypeRemapper {
     inline bool empty() { return remapperMap.empty(); }
 };
 
+struct InstructionVariant {
+    enum Kind {
+        TYPE,
+        GLOBAL,
+    };
+
+    InstructionVariant(Instruction *encounterInst, Type *type, size_t opPos = 0)
+            : inst(encounterInst), kind(InstructionVariant::TYPE),
+              newType(type), opPos(opPos){};
+    InstructionVariant(Instruction *encounterInst,
+                       GlobalVariable *global,
+                       size_t opPos = 0)
+            : inst(encounterInst), kind(InstructionVariant::GLOBAL),
+              newGlobal(global), opPos(opPos){};
+
+    Instruction *inst;
+    Kind kind;
+    Type *newType{nullptr};
+    GlobalVariable *newGlobal{nullptr};
+    size_t opPos;
+};
+
 class PatternRepresentation {
     friend std::ostream &operator<<(std::ostream &os,
                                     PatternRepresentation &pg);
@@ -78,9 +100,13 @@ class PatternRepresentation {
                                   MDString::get(context, "pattern-end"))}}){};
     void refreshFunctions();
 
+    std::unique_ptr<Module> generateVariant(std::vector<InstructionVariant> var,
+                                            std::string variantSuffix = "");
+
     std::unique_ptr<Module> mod;
     std::pair<std::string, std::string> funNames;
     std::pair<Function *, Function *> functions;
+    std::vector<std::vector<InstructionVariant>> variants;
 
   private:
     enum Metadata {

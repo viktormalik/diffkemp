@@ -5,6 +5,13 @@ void PatternRepresentation::refreshFunctions() {
     functions.second = mod->getFunction(funNames.second);
 }
 
+std::unique_ptr<Module> PatternRepresentation::generateVariant(
+        std::vector<InstructionVariant> var, std::string variantSuffix) {
+
+    auto varMod = std::make_unique<Module>(mod->getName().str() + variantSuffix,
+                                           this->context);
+    return varMod;
+}
 PatternGenerator::MinimalModuleAnalysis::MinimalModuleAnalysis(Config &conf) {
     conf.refreshFunctions();
     /// All of these are not inside of the member initializer list,
@@ -300,6 +307,8 @@ bool PatternGenerator::addFunctionToPattern(Module *mod,
     Function *tmpFun = nullptr;
     std::set<std::pair<Instruction *, Value *>> markedValues;
     std::set<Value *> parametrizedValues;
+    std::vector<Type *> futureParamTypes;
+    std::vector<InstructionVariant> variants;
     while (BBL != PatternFun->end() && BBR != CandidateFun->end()) {
         auto InL = BBL->begin();
         auto InR = BBR->begin();
@@ -309,7 +318,34 @@ bool PatternGenerator::addFunctionToPattern(Module *mod,
                 /// operations.
                 return false;
             }
+            auto AllocaL = dyn_cast<AllocaInst>(InL);
+            auto AllocaR = dyn_cast<AllocaInst>(InR);
+            if (AllocaL && AllocaR) {
+                std::cout << "Both are Alloca" << std::endl;
+                auto StructL =
+                        dyn_cast<StructType>(AllocaL->getAllocatedType());
+                auto StructR =
+                        dyn_cast<StructType>(AllocaR->getAllocatedType());
+                if (StructL != StructR) {
+                    variants.emplace_back(&(*InL), StructR, 0);
+                    std::cout << "Struct types do not match in Alloca"
+                              << std::endl;
+                    /// TODO: Mark instruction as variation
+                }
             }
+            auto GepL = dyn_cast<GetElementPtrInst>(InL);
+            auto GepR = dyn_cast<GetElementPtrInst>(InR);
+            if (GepL && GepR) {
+                std::cout << "Both are GEP" << std::endl;
+                auto StructL =
+                        dyn_cast<StructType>(GepL->getSourceElementType());
+                auto StructR =
+                        dyn_cast<StructType>(GepR->getSourceElementType());
+                if (StructL != StructR) {
+                    variants.emplace_back(&(*InL), StructR, 0);
+                    std::cout << "Struct types do not match in GEP"
+                              << std::endl;
+                    /// TODO: Mark instruction as variation
                 }
             }
             if (!semDiff->cmpOperationsWithOperands(&(*InL), &(*InR))) {
@@ -326,9 +362,19 @@ bool PatternGenerator::addFunctionToPattern(Module *mod,
             for (auto OpL = InL->op_begin(), OpR = InR->op_begin();
                  OpL != InL->op_end() && OpR != InR->op_end();
                  ++OpL, ++OpR) {
+                /// Elementar types usually use different instructions, hence
+                /// at this point they are already out of the game.
+                auto OpTypeL = OpL->get()->getType();
+                auto OpTypeR = OpR->get()->getType();
+                if (OpTypeL != OpTypeR) {
                     std::cout << "Not Implemented" << std::endl;
                 } else {
                     if (semDiff->cmpValues(OpL->get(), OpR->get())) {
+                        // Skip if operand is a global variable
+                        if (isValueGlobal(*OpL->get(),
+                                          *PatternFun->getParent())) {
+                            continue;
+                        }
                         /// Value is already parametrized
                         if (parametrizedValues.find(OpL->get())
                             != parametrizedValues.end()) {
@@ -344,6 +390,7 @@ bool PatternGenerator::addFunctionToPattern(Module *mod,
                                        != markedValues.end()) {
                             continue;
                         }
+                        futureParamTypes.push_back(OpL->get()->getType());
                         if (tmpFun) {
                             tmpFun = cloneFunctionWithExtraArgument(
                                     tmpFun->getParent(),
@@ -366,6 +413,18 @@ bool PatternGenerator::addFunctionToPattern(Module *mod,
         }
         BBR++;
         BBL++;
+    }
+    if (!variants.empty()) {
+        for (auto &var : variants) {
+            switch (var.kind) {
+            case InstructionVariant::TYPE:
+                if (auto s = dyn_cast<StructType>(var.newType)) {
+                    std::cout << "New Type Name: " << s->getStructName().str()
+                              << std::endl;
+                }
+            }
+        }
+        this->patterns[patternName]->variants.push_back(variants);
     }
     if (tmpFun) {
         for (BBL = PatternFun->begin(), BBR = tmpFun->begin();
@@ -471,6 +530,7 @@ bool PatternGenerator::addFunctionPairToPattern(
     this->determinePatternRange(this->patterns[patternName].get());
 
     if (!resultL || !resultR) {
+        this->patterns.erase(patternName);
         return false;
     }
     return true;
@@ -489,6 +549,9 @@ std::ostream &operator<<(std::ostream &os, PatternRepresentation &pat) {
     std::string tmpStr;
     raw_string_ostream tmp(tmpStr);
     tmp << *(pat.mod);
+    for (auto &var : pat.variants) {
+        tmp << *(pat.generateVariant(var));
+    }
     os << tmpStr;
     return os;
 }
