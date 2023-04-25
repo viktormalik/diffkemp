@@ -31,6 +31,27 @@ using namespace llvm;
 #include <unordered_map>
 #include <utility>
 
+class StructTypeRemapper : public ValueMapTypeRemapper {
+  private:
+    std::map<Type *, Type *> remapperMap;
+
+  public:
+    StructTypeRemapper() : remapperMap(){};
+    StructTypeRemapper(std::map<Type *, Type *> newMap) : remapperMap(newMap){};
+    virtual Type *remapType(Type *srcType) override {
+        for (auto &remapping : remapperMap) {
+            if (srcType == remapping.first) {
+                return remapping.second;
+            }
+        }
+        return srcType;
+    }
+    inline void addNewMapping(StructType *from, StructType *to) {
+        remapperMap.insert({from, to});
+    }
+    inline bool empty() { return remapperMap.empty(); }
+};
+
 class PatternRepresentation {
     friend std::ostream &operator<<(std::ostream &os,
                                     PatternRepresentation &pg);

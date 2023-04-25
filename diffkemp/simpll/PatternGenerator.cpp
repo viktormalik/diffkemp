@@ -116,9 +116,11 @@ void PatternGenerator::attachMetadata(Instruction *instr,
 
 /// TODO: Make this one function
 /// TODO: Refactor me in accordance to FunctionType
-Function *PatternGenerator::cloneFunctionWithExtraArgument(Module *dstMod,
-                                                           Function *src,
-                                                           Type &newType) {
+Function *PatternGenerator::cloneFunctionWithExtraArgument(
+        Module *dstMod,
+        Function *src,
+        Type &newType,
+        StructTypeRemapper *remapper) {
     auto newFunTypeParams = src->getFunctionType()->params().vec();
     newFunTypeParams.push_back(&newType);
     auto newFunType =
@@ -131,13 +133,58 @@ Function *PatternGenerator::cloneFunctionWithExtraArgument(Module *dstMod,
         patternFuncArgIter->setName(arg.getName());
         tmpValueMap[&arg] = &(*patternFuncArgIter++);
     }
+    auto tmpRemapper = std::make_unique<StructTypeRemapper>();
+    if (!remapper) {
+        std::vector<StructType *> foundStructTypes;
+        for (auto &BB : *src) {
+            for (auto &Inst : BB) {
+                if (auto InstAlloca = dyn_cast<AllocaInst>(&Inst)) {
+                    if (auto StType = dyn_cast<StructType>(
+                                InstAlloca->getAllocatedType())) {
+                        foundStructTypes.push_back(StType);
+                    }
+                } else if (auto InstGEP = dyn_cast<GetElementPtrInst>(&Inst)) {
+                    if (auto StType = dyn_cast<StructType>(
+                                InstGEP->getSourceElementType())) {
+                        foundStructTypes.push_back(StType);
+                    }
+                }
+            }
+        }
+        for (auto &s : foundStructTypes) {
+            std::cout << "Found: " << s->getStructName().str() << std::endl;
+        }
+        for (auto &StructL : dstMod->getIdentifiedStructTypes()) {
+            /// We want to prevent double mapping
+            auto structIter = foundStructTypes.begin();
+            while (structIter != foundStructTypes.end()) {
+                if ((*structIter)->getStructName()
+                    == StructL->getStructName()) {
+                    std::cout << "remapping: "
+                              << (*structIter)->getStructName().str() << " --> "
+                              << StructL->getStructName().str() << std::endl;
+                    tmpRemapper->addNewMapping(*structIter, StructL);
+                    foundStructTypes.erase(structIter);
+                } else {
+                    ++structIter;
+                }
+            }
+        }
+        if (!tmpRemapper->empty()) {
+            remapper = tmpRemapper.get();
+        }
+    }
 
     llvm::SmallVector<llvm::ReturnInst *, 8> returns;
     llvm::CloneFunctionInto(dst,
                             src,
                             tmpValueMap,
-                            llvm::CloneFunctionChangeType::DifferentModule,
-                            returns);
+                            llvm::CloneFunctionChangeType::LocalChangesOnly,
+                            returns,
+                            "",
+                            nullptr,
+                            remapper);
+
     /// We dont have to check for global variables, as they are already
     /// initialized from pattern initialization.
     return dst;
@@ -145,7 +192,8 @@ Function *PatternGenerator::cloneFunctionWithExtraArgument(Module *dstMod,
 
 Function *PatternGenerator::cloneFunction(std::string prefix,
                                           Module *mod,
-                                          Function *src) {
+                                          Function *src,
+                                          StructTypeRemapper *remapper) {
     auto dst = Function::Create(src->getFunctionType(),
                                 src->getLinkage(),
                                 prefix + src->getName().str(),
@@ -157,12 +205,53 @@ Function *PatternGenerator::cloneFunction(std::string prefix,
         tmpValueMap[&arg] = &(*patternFuncArgIter++);
     }
 
+    auto tmpRemapper = std::make_unique<StructTypeRemapper>();
+    if (!remapper) {
+        std::vector<StructType *> foundStructTypes;
+        for (auto &BB : *src) {
+            for (auto &Inst : BB) {
+                if (auto InstAlloca = dyn_cast<AllocaInst>(&Inst)) {
+                    if (auto StType = dyn_cast<StructType>(
+                                InstAlloca->getAllocatedType())) {
+                        foundStructTypes.push_back(StType);
+                    }
+                } else if (auto InstGEP = dyn_cast<GetElementPtrInst>(&Inst)) {
+                    if (auto StType = dyn_cast<StructType>(
+                                InstGEP->getSourceElementType())) {
+                        foundStructTypes.push_back(StType);
+                    }
+                }
+            }
+        }
+        // auto newType = StructType::create(
+        //         mod->getContext(), {}, "newSuperDuperStruct", false);
+        for (auto &StructL : mod->getIdentifiedStructTypes()) {
+            /// We want to prevent double mapping
+            auto structIter = foundStructTypes.begin();
+            while (structIter != foundStructTypes.end()) {
+                if ((*structIter)->getStructName()
+                    == StructL->getStructName()) {
+                    tmpRemapper->addNewMapping(*structIter, StructL);
+                    foundStructTypes.erase(structIter);
+                } else {
+                    ++structIter;
+                }
+            }
+        }
+        if (!tmpRemapper->empty()) {
+            remapper = tmpRemapper.get();
+        }
+    }
+
     llvm::SmallVector<llvm::ReturnInst *, 8> returns;
     llvm::CloneFunctionInto(dst,
                             src,
                             tmpValueMap,
                             llvm::CloneFunctionChangeType::DifferentModule,
-                            returns);
+                            returns,
+                            "",
+                            nullptr,
+                            remapper);
     /// TODO: check if failed
 
     /// initialize global variables
