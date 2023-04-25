@@ -126,7 +126,7 @@ Function *PatternGenerator::cloneFunctionWithExtraArgument(
     auto newFunType =
             FunctionType::get(src->getReturnType(), newFunTypeParams, false);
     auto dst = Function::Create(
-            newFunType, src->getLinkage(), "tmp" + src->getName(), dstMod);
+            newFunType, src->getLinkage(), "tmp." + src->getName(), dstMod);
     llvm::ValueToValueMapTy tmpValueMap;
     auto patternFuncArgIter = dst->arg_begin();
     for (auto &arg : src->args()) {
