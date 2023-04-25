@@ -307,31 +307,27 @@ bool PatternGenerator::addFunctionToPattern(Module *mod,
             auto AllocaL = dyn_cast<AllocaInst>(InL);
             auto AllocaR = dyn_cast<AllocaInst>(InR);
             if (AllocaL && AllocaR) {
-                std::cout << "Both are Alloca" << std::endl;
                 auto StructL =
                         dyn_cast<StructType>(AllocaL->getAllocatedType());
                 auto StructR =
                         dyn_cast<StructType>(AllocaR->getAllocatedType());
-                if (StructL != StructR) {
-                    variants.emplace_back(&(*InL), StructR, 0);
-                    std::cout << "Struct types do not match in Alloca"
-                              << std::endl;
-                    /// TODO: Mark instruction as variation
+                if (StructL != nullptr && StructR != nullptr) {
+                    if (StructL != StructR) {
+                        variants.emplace_back(&(*InL), StructR, 0);
+                    }
                 }
             }
             auto GepL = dyn_cast<GetElementPtrInst>(InL);
             auto GepR = dyn_cast<GetElementPtrInst>(InR);
             if (GepL && GepR) {
-                std::cout << "Both are GEP" << std::endl;
                 auto StructL =
                         dyn_cast<StructType>(GepL->getSourceElementType());
                 auto StructR =
                         dyn_cast<StructType>(GepR->getSourceElementType());
-                if (StructL != StructR) {
-                    variants.emplace_back(&(*InL), StructR, 0);
-                    std::cout << "Struct types do not match in GEP"
-                              << std::endl;
-                    /// TODO: Mark instruction as variation
+                if (StructL != nullptr && StructR != nullptr) {
+                    if (StructL != StructR) {
+                        variants.emplace_back(&(*InL), StructR, 0);
+                    }
                 }
             }
             if (!semDiff->cmpOperationsWithOperands(&(*InL), &(*InR))) {
@@ -400,17 +396,14 @@ bool PatternGenerator::addFunctionToPattern(Module *mod,
         BBR++;
         BBL++;
     }
-    if (!variants.empty()) {
-        for (auto &var : variants) {
-            switch (var.kind) {
-            case InstructionVariant::TYPE:
-                if (auto s = dyn_cast<StructType>(var.newType)) {
-                    std::cout << "New Type Name: " << s->getStructName().str()
-                              << std::endl;
-                }
+    for (auto &var : variants) {
+        switch (var.kind) {
+        case InstructionVariant::TYPE:
+            if (auto s = dyn_cast<StructType>(var.newType)) {
+                std::cout << "New Type Name: " << s->getStructName().str()
+                          << std::endl;
             }
         }
-        this->patterns[patternName]->variants.push_back(variants);
     }
     /// We want to insert even empty variants, as we want to make pairings
     this->patterns[patternName]->variants.push_back(variants);
