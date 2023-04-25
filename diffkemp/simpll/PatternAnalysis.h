@@ -8,6 +8,7 @@
 #include "Config.h"
 #include "Output.h"
 #include "PatternGenerator.h"
+#include "Utils.h"
 
 static auto gPatternGen = std::make_unique<PatternGenerator>();
 void readPatternConfig(std::string configPath);

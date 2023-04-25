@@ -7,6 +7,7 @@
 #include "ModuleAnalysis.h"
 #include "Output.h"
 #include "Result.h"
+#include "Utils.h"
 #include "passes/StructureSizeAnalysis.h"
 
 #include <llvm/ADT/SmallVector.h>
@@ -100,8 +101,13 @@ class PatternRepresentation {
                                   MDString::get(context, "pattern-end"))}}){};
     void refreshFunctions();
 
-    std::unique_ptr<Module> generateVariant(std::vector<InstructionVariant> var,
-                                            std::string variantSuffix = "");
+    std::unique_ptr<Module>
+            generateVariant(std::pair<std::vector<InstructionVariant>,
+                                      std::vector<InstructionVariant>> var,
+                            std::string variantSuffix = "");
+    void applyVariant(std::vector<InstructionVariant> &var,
+                      Function *VarFun,
+                      bool isLeftSide);
 
     std::unique_ptr<Module> mod;
     std::pair<std::string, std::string> funNames;
@@ -194,6 +200,10 @@ Function *cloneFunction(Module *dstMod,
                         std::string prefix = "",
                         std::vector<Type *> newArgs = {},
                         StructTypeRemapper *remapper = nullptr);
+
+void remapVariants(Function *src,
+                   Function *dst,
+                   std::vector<InstructionVariant> &vars);
 
 struct PatternCandidate {
     std::string function{""};
