@@ -304,28 +304,12 @@ bool PatternGenerator::addFunctionToPattern(Module *mod,
         auto InL = BBL->begin();
         auto InR = BBR->begin();
         while (InL != BBL->end() || InR != BBR->end()) {
-            if (semDiff->maySkipInstruction(&(*InL))) {
-                InL++;
-                continue;
-            }
-            if (semDiff->maySkipInstruction(&(*InR))) {
-                InR++;
-                continue;
-            }
-
             if (InL->getOpcode() != InR->getOpcode()) {
                 /// We cannot create a pattern from code snippets with differing
                 /// operations.
                 return false;
             }
-            if (InL->getNumOperands() != InR->getNumOperands()) {
-                /// TODO: check if there is any operation with variatic number
-                /// of operands
-                return false;
             }
-            for (auto &it : InL->operands()) {
-                if (isOpFunctionArg(it, *PatternFun)) {
-                    std::cout << "operand is a function argument" << std::endl;
                 }
             }
             if (!semDiff->cmpOperationsWithOperands(&(*InL), &(*InR))) {
@@ -342,14 +326,12 @@ bool PatternGenerator::addFunctionToPattern(Module *mod,
             for (auto OpL = InL->op_begin(), OpR = InR->op_begin();
                  OpL != InL->op_end() && OpR != InR->op_end();
                  ++OpL, ++OpR) {
-                if (OpL->get()->getType() != OpR->get()->getType()) {
                     std::cout << "Not Implemented" << std::endl;
                 } else {
                     if (semDiff->cmpValues(OpL->get(), OpR->get())) {
                         /// Value is already parametrized
                         if (parametrizedValues.find(OpL->get())
                             != parametrizedValues.end()) {
-                            std::cout << "already parametrized" << std::endl;
                             continue;
                         }
                         /// difference is in the value
@@ -360,7 +342,6 @@ bool PatternGenerator::addFunctionToPattern(Module *mod,
                                          markedValues.end(),
                                          pp)
                                        != markedValues.end()) {
-                            std::cout << "parametrized twice, man" << std::endl;
                             continue;
                         }
                         if (tmpFun) {
@@ -373,14 +354,6 @@ bool PatternGenerator::addFunctionToPattern(Module *mod,
                                     PatternFun->getParent(),
                                     PatternFun,
                                     *OpL->get()->getType());
-                        }
-                        // Skip if operand is a global variable
-                        if (isValueGlobal(*OpL->get(),
-                                          *PatternFun->getParent())) {
-                            std::cout << "different value is global, that "
-                                         "is handled differently"
-                                      << std::endl;
-                            continue;
                         }
                         markedValues.insert(
                                 std::make_pair(&(*InL), OpL->get()));
