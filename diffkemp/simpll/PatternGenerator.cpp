@@ -6,12 +6,74 @@ void PatternRepresentation::refreshFunctions() {
 }
 
 std::unique_ptr<Module> PatternRepresentation::generateVariant(
-        std::vector<InstructionVariant> var, std::string variantSuffix) {
+        std::pair<std::vector<InstructionVariant>,
+                  std::vector<InstructionVariant>> var,
+        std::string variantSuffix) {
 
     auto varMod = std::make_unique<Module>(mod->getName().str() + variantSuffix,
                                            this->context);
+
+    /// It is impossible to have an odd number of variants, as we are inserting
+    /// even empty ones.
+    assert(variants.size() % 2 == 0);
+
+    auto VarFunL = cloneFunction(varMod.get(), functions.first);
+    auto VarFunR = cloneFunction(varMod.get(), functions.second);
+
+    applyVariant(var.first, VarFunL, true);
+    applyVariant(var.second, VarFunR, false);
+
     return varMod;
 }
+
+void PatternRepresentation::applyVariant(std::vector<InstructionVariant> &var,
+                                         Function *VarFun,
+                                         bool isLeftSide) {
+    Function *Fun = isLeftSide ? functions.first : functions.second;
+    auto varIter = var.begin();
+    while (varIter != var.end()) {
+        bool found = false;
+        for (auto BBL = Fun->begin(), BBR = VarFun->begin(); BBL != Fun->end();
+             ++BBL, ++BBR) {
+            for (auto InstL = BBL->begin(), InstR = BBR->begin();
+                 InstL != BBL->end();
+                 ++InstL, ++InstR) {
+                if (&(*InstL) == varIter->inst) {
+                    if (auto InstAlloca = dyn_cast<AllocaInst>(&(*InstR))) {
+                        auto NewInstAlloca = new AllocaInst(
+                                varIter->newType, 0, "", &(*InstR));
+                        NewInstAlloca->setAlignment(InstAlloca->getAlign());
+                        InstAlloca->replaceAllUsesWith(NewInstAlloca);
+                        InstAlloca->eraseFromParent();
+                    } else if (auto InstGep =
+                                       dyn_cast<GetElementPtrInst>(&(*InstR))) {
+                        std::vector<Value *> operands;
+                        for (auto &op : InstGep->operands()) {
+                            operands.push_back(op);
+                        }
+                        auto ptr = operands[0];
+                        operands.erase(operands.begin());
+                        auto NewInstGep = GetElementPtrInst::Create(
+                                varIter->newType, ptr, operands, "", InstGep);
+                        InstGep->replaceAllUsesWith(NewInstGep);
+                        InstGep->eraseFromParent();
+                    }
+                    found = true;
+                    break;
+                }
+            }
+            if (found) {
+                break;
+            }
+        }
+        if (found) {
+            var.erase(varIter);
+        } else {
+            ++varIter;
+        }
+    }
+}
+
 PatternGenerator::MinimalModuleAnalysis::MinimalModuleAnalysis(Config &conf) {
     conf.refreshFunctions();
     /// All of these are not inside of the member initializer list,
@@ -121,10 +183,22 @@ void PatternGenerator::attachMetadata(Instruction *instr,
     instr->setMetadata("diffkemp.pattern", node);
 }
 
+void remapVariants(Function *src,
+                   Function *dst,
+                   std::vector<InstructionVariant> &vars) {
+    for (auto BBL = src->begin(), BBR = dst->begin(); BBL != src->end();
+         ++BBL) {
+        for (auto InstL = BBL->begin(), InstR = BBR->begin();
+             InstL != BBL->end();
+             ++InstL, ++InstR) {
+            for (auto &var : vars) {
+                if (var.inst == &(*InstL)) {
+                    var.inst = &(*InstR);
                 }
             }
         }
     }
+}
 
 Function *cloneFunction(Module *dstMod,
                         Function *src,
@@ -338,6 +412,8 @@ bool PatternGenerator::addFunctionToPattern(Module *mod,
         }
         this->patterns[patternName]->variants.push_back(variants);
     }
+    /// We want to insert even empty variants, as we want to make pairings
+    this->patterns[patternName]->variants.push_back(variants);
     if (tmpFun) {
         for (BBL = PatternFun->begin(), BBR = tmpFun->begin();
              BBL != PatternFun->end();
@@ -361,6 +437,11 @@ bool PatternGenerator::addFunctionToPattern(Module *mod,
             }
         }
         auto pastFunName = PatternFun->getName();
+
+        for (auto &var : this->patterns[patternName]->variants) {
+            remapVariants(PatternFun, tmpFun, var);
+        }
+
         PatternFun->eraseFromParent();
         tmpFun->setName(pastFunName);
 
