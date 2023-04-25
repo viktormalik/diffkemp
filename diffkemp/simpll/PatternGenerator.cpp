@@ -460,15 +460,17 @@ bool PatternGenerator::addFunctionPairToPattern(
     /// This pattern is not yet initialized, and we have to initialize it by
     /// copying module functions to it.
     if (this->patterns.find(patternName) == this->patterns.end()) {
+        const std::string oldPrefix = "diffkemp.old.";
+        const std::string newPrefix = "diffkemp.new.";
         this->patterns[patternName] = std::make_unique<PatternRepresentation>(
                 patternName,
-                ("diffkemp.old." + FunL->getName()).str(),
-                ("diffkemp.new." + FunR->getName()).str());
+                (oldPrefix + FunL->getName()).str(),
+                (newPrefix + FunR->getName()).str());
         auto PatternRepr = this->patterns[patternName].get();
         PatternRepr->functions.first =
-                cloneFunction("diffkemp.old.", PatternRepr->mod.get(), FunL);
+                cloneFunction(oldPrefix, PatternRepr->mod.get(), FunL);
         PatternRepr->functions.second =
-                cloneFunction("diffkemp.new.", PatternRepr->mod.get(), FunR);
+                cloneFunction(newPrefix, PatternRepr->mod.get(), FunR);
 
         auto attrs = AttributeList();
         PatternRepr->functions.first->setAttributes(attrs);
