@@ -186,18 +186,14 @@ class PatternGenerator {
     void attachMetadata(Instruction *instr, std::string metadataStr);
     void determinePatternRange(PatternRepresentation *PatRep);
 
-    Function *cloneFunctionWithExtraArgument(
-            Module *dstMod,
-            Function *src,
-            Type &newType,
-            StructTypeRemapper *remapper = nullptr);
-    Function *cloneFunction(std::string prefix,
-                            Module *dstMod,
-                            Function *src,
-                            StructTypeRemapper *remapper = nullptr);
-
     bool isValueGlobal(Value &val, Module &mod);
 };
+
+Function *cloneFunction(Module *dstMod,
+                        Function *src,
+                        std::string prefix = "",
+                        std::vector<Type *> newArgs = {},
+                        StructTypeRemapper *remapper = nullptr);
 
 struct PatternCandidate {
     std::string function{""};

@@ -121,25 +121,37 @@ void PatternGenerator::attachMetadata(Instruction *instr,
     instr->setMetadata("diffkemp.pattern", node);
 }
 
-/// TODO: Make this one function
-/// TODO: Refactor me in accordance to FunctionType
-Function *PatternGenerator::cloneFunctionWithExtraArgument(
-        Module *dstMod,
-        Function *src,
-        Type &newType,
-        StructTypeRemapper *remapper) {
+                }
+            }
+        }
+    }
+
+Function *cloneFunction(Module *dstMod,
+                        Function *src,
+                        std::string prefix,
+                        std::vector<Type *> newArgTypes,
+                        StructTypeRemapper *remapper) {
+    /// Merge new function argument types with new types and popule one from
+    /// the source with value mapping between source and destination functions.
     auto newFunTypeParams = src->getFunctionType()->params().vec();
-    newFunTypeParams.push_back(&newType);
+    for (auto &newArgType : newArgTypes) {
+        newFunTypeParams.push_back(newArgType);
+    }
     auto newFunType =
             FunctionType::get(src->getReturnType(), newFunTypeParams, false);
     auto dst = Function::Create(
-            newFunType, src->getLinkage(), "tmp." + src->getName(), dstMod);
+            newFunType, src->getLinkage(), prefix + src->getName(), dstMod);
     llvm::ValueToValueMapTy tmpValueMap;
     auto patternFuncArgIter = dst->arg_begin();
     for (auto &arg : src->args()) {
         patternFuncArgIter->setName(arg.getName());
         tmpValueMap[&arg] = &(*patternFuncArgIter++);
     }
+
+    /// If function contains any structure types, that are already present in
+    /// the destination context (comparison is done by name only), then remap
+    /// instances of the source structure type to destination contexts structure
+    /// type.
     auto tmpRemapper = std::make_unique<StructTypeRemapper>();
     if (!remapper) {
         std::vector<StructType *> foundStructTypes;
@@ -157,9 +169,6 @@ Function *PatternGenerator::cloneFunctionWithExtraArgument(
                     }
                 }
             }
-        }
-        for (auto &s : foundStructTypes) {
-            std::cout << "Found: " << s->getStructName().str() << std::endl;
         }
         for (auto &StructL : dstMod->getIdentifiedStructTypes()) {
             /// We want to prevent double mapping
@@ -167,9 +176,6 @@ Function *PatternGenerator::cloneFunctionWithExtraArgument(
             while (structIter != foundStructTypes.end()) {
                 if ((*structIter)->getStructName()
                     == StructL->getStructName()) {
-                    std::cout << "remapping: "
-                              << (*structIter)->getStructName().str() << " --> "
-                              << StructL->getStructName().str() << std::endl;
                     tmpRemapper->addNewMapping(*structIter, StructL);
                     foundStructTypes.erase(structIter);
                 } else {
@@ -182,112 +188,18 @@ Function *PatternGenerator::cloneFunctionWithExtraArgument(
         }
     }
 
-    llvm::SmallVector<llvm::ReturnInst *, 8> returns;
-    llvm::CloneFunctionInto(dst,
-                            src,
-                            tmpValueMap,
-                            llvm::CloneFunctionChangeType::LocalChangesOnly,
-                            returns,
-                            "",
-                            nullptr,
-                            remapper);
+    /// Builtin clone functions needs to know whether cloning appears in the
+    /// same module.
+    CloneFunctionChangeType changeType =
+            (dstMod == src->getParent()
+                     ? CloneFunctionChangeType::LocalChangesOnly
+                     : CloneFunctionChangeType::DifferentModule);
 
-    /// We dont have to check for global variables, as they are already
-    /// initialized from pattern initialization.
+    SmallVector<llvm::ReturnInst *, 8> returns;
+    CloneFunctionInto(
+            dst, src, tmpValueMap, changeType, returns, "", nullptr, remapper);
     return dst;
-};
-
-Function *PatternGenerator::cloneFunction(std::string prefix,
-                                          Module *mod,
-                                          Function *src,
-                                          StructTypeRemapper *remapper) {
-    auto dst = Function::Create(src->getFunctionType(),
-                                src->getLinkage(),
-                                prefix + src->getName().str(),
-                                mod);
-    llvm::ValueToValueMapTy tmpValueMap;
-    auto patternFuncArgIter = dst->arg_begin();
-    for (auto &arg : src->args()) {
-        patternFuncArgIter->setName(arg.getName());
-        tmpValueMap[&arg] = &(*patternFuncArgIter++);
-    }
-
-    auto tmpRemapper = std::make_unique<StructTypeRemapper>();
-    if (!remapper) {
-        std::vector<StructType *> foundStructTypes;
-        for (auto &BB : *src) {
-            for (auto &Inst : BB) {
-                if (auto InstAlloca = dyn_cast<AllocaInst>(&Inst)) {
-                    if (auto StType = dyn_cast<StructType>(
-                                InstAlloca->getAllocatedType())) {
-                        foundStructTypes.push_back(StType);
-                    }
-                } else if (auto InstGEP = dyn_cast<GetElementPtrInst>(&Inst)) {
-                    if (auto StType = dyn_cast<StructType>(
-                                InstGEP->getSourceElementType())) {
-                        foundStructTypes.push_back(StType);
-                    }
-                }
-            }
-        }
-        // auto newType = StructType::create(
-        //         mod->getContext(), {}, "newSuperDuperStruct", false);
-        for (auto &StructL : mod->getIdentifiedStructTypes()) {
-            /// We want to prevent double mapping
-            auto structIter = foundStructTypes.begin();
-            while (structIter != foundStructTypes.end()) {
-                if ((*structIter)->getStructName()
-                    == StructL->getStructName()) {
-                    tmpRemapper->addNewMapping(*structIter, StructL);
-                    foundStructTypes.erase(structIter);
-                } else {
-                    ++structIter;
-                }
-            }
-        }
-        if (!tmpRemapper->empty()) {
-            remapper = tmpRemapper.get();
-        }
-    }
-
-    llvm::SmallVector<llvm::ReturnInst *, 8> returns;
-    llvm::CloneFunctionInto(dst,
-                            src,
-                            tmpValueMap,
-                            llvm::CloneFunctionChangeType::DifferentModule,
-                            returns,
-                            "",
-                            nullptr,
-                            remapper);
-    /// TODO: check if failed
-
-    /// initialize global variables
-    for (auto &BB : *dst) {
-        for (auto &Inst : BB) {
-            for (auto &Op : Inst.operands()) {
-                if (auto *Global = dyn_cast<GlobalVariable>(Op)) {
-                    auto newGlobal = dst->getParent()->getOrInsertGlobal(
-                            Global->getName(), Global->getType());
-                    Op->replaceAllUsesWith(newGlobal);
-                }
-            }
-        }
-    }
-    /// Provide declaration of used functions
-    for (auto &BB : *dst) {
-        for (auto &Inst : BB) {
-            if (auto call = dyn_cast<CallInst>(&Inst)) {
-                auto calledFun = call->getCalledFunction();
-                call->setCalledFunction(
-                        Function::Create(calledFun->getFunctionType(),
-                                         calledFun->getLinkage(),
-                                         prefix + calledFun->getName(),
-                                         dst->getParent()));
-            }
-        }
-    }
-    return dst;
-};
+}
 
 bool PatternGenerator::addFunctionToPattern(Module *mod,
                                             Function *PatternFun,
@@ -392,15 +304,15 @@ bool PatternGenerator::addFunctionToPattern(Module *mod,
                         }
                         futureParamTypes.push_back(OpL->get()->getType());
                         if (tmpFun) {
-                            tmpFun = cloneFunctionWithExtraArgument(
-                                    tmpFun->getParent(),
-                                    tmpFun,
-                                    *OpL->get()->getType());
+                            tmpFun = cloneFunction(tmpFun->getParent(),
+                                                   tmpFun,
+                                                   "tmp.",
+                                                   {OpL->get()->getType()});
                         } else {
-                            tmpFun = cloneFunctionWithExtraArgument(
-                                    PatternFun->getParent(),
-                                    PatternFun,
-                                    *OpL->get()->getType());
+                            tmpFun = cloneFunction(PatternFun->getParent(),
+                                                   PatternFun,
+                                                   "tmp.",
+                                                   {OpL->get()->getType()});
                         }
                         markedValues.insert(
                                 std::make_pair(&(*InL), OpL->get()));
@@ -500,9 +412,9 @@ bool PatternGenerator::addFunctionPairToPattern(
                 (newPrefix + FunR->getName()).str());
         auto PatternRepr = this->patterns[patternName].get();
         PatternRepr->functions.first =
-                cloneFunction(oldPrefix, PatternRepr->mod.get(), FunL);
+                cloneFunction(PatternRepr->mod.get(), FunL, oldPrefix);
         PatternRepr->functions.second =
-                cloneFunction(newPrefix, PatternRepr->mod.get(), FunR);
+                cloneFunction(PatternRepr->mod.get(), FunR, newPrefix);
 
         auto attrs = AttributeList();
         PatternRepr->functions.first->setAttributes(attrs);
