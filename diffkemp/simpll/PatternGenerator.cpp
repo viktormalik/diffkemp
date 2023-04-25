@@ -419,6 +419,19 @@ bool PatternGenerator::addFunctionToPattern(Module *mod,
         auto pastFunName = PatternFun->getName();
         PatternFun->eraseFromParent();
         tmpFun->setName(pastFunName);
+
+        /// It has been observed, that sometimes the temporary functions were
+        /// not erased. Because of that we want to be sure as otherwise they
+        /// polute the output.
+        std::vector<Function *> toRemove;
+        for (auto &f : tmpFun->getParent()->getFunctionList()) {
+            if (f.getName().str().rfind("tmp", 0) == 0) {
+                toRemove.push_back(&f);
+            }
+        }
+        for (auto &f : toRemove) {
+            f->eraseFromParent();
+        }
     }
     return true;
 }
