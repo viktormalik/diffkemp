@@ -549,8 +549,15 @@ std::ostream &operator<<(std::ostream &os, PatternRepresentation &pat) {
     std::string tmpStr;
     raw_string_ostream tmp(tmpStr);
     tmp << *(pat.mod);
-    for (auto &var : pat.variants) {
-        tmp << *(pat.generateVariant(var));
+    int i = 1;
+    for (auto varIter = pat.variants.begin(); varIter != pat.variants.end();
+         ++varIter) {
+        tmp << Color::makeYellow("Generated Variant no. " + std::to_string(i)
+                                 + ":");
+        tmp << "\n";
+        tmp << *(pat.generateVariant({*varIter, *(++varIter)},
+                                     "-var-" + std::to_string(i)));
+        ++i;
     }
     os << tmpStr;
     return os;
