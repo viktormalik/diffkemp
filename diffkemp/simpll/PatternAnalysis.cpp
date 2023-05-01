@@ -32,6 +32,22 @@ void readPatternConfig(std::string configPath) {
             std::cout << Color::makeGreen("Successfule generation of pattern: ")
                       << pattern.name << std::endl;
             std::cout << *(*gPatternGen)[pattern.name] << std::endl;
+            auto pat = (*gPatternGen)[pattern.name];
+            int i = 0;
+            for (auto varIter = pat->variants.begin();
+                 varIter != pat->variants.end();
+                 ++varIter) {
+                auto varMod = pat->generateVariant({*varIter, *(++varIter)},
+                                                   "-var-" + std::to_string(i));
+                gPatternGen->determinePatternRange(pat, *varMod);
+                if (!varMod->empty()) {
+                    llvm::outs() << Color::makeYellow(
+                            "Generated Variant no. " + std::to_string(i) + ": ")
+                                 << varMod->getName().str() << "\n";
+                    varMod->print(llvm::outs(), nullptr);
+                    ++i;
+                }
+            }
         } else {
             std::cout << Color::makeRed("Generation of pattern ")
                       << Color::makeRed(" failed: ") << "pattern '"
