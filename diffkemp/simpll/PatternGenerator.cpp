@@ -374,6 +374,38 @@ Function *cloneFunction(Module *dstMod,
         }
     }
 
+    for (auto &globalL : src->getParent()->globals()) {
+        bool found = false;
+        for (auto &globalR : dstMod->globals()) {
+            if (globalL.getName() == globalR.getName()) {
+                found = true;
+            }
+        }
+        if (!found) {
+            auto newGlobal = new GlobalVariable(*dstMod,
+                                                globalL.getType(),
+                                                globalL.isConstant(),
+                                                globalL.getLinkage(),
+                                                nullptr,
+                                                globalL.getName());
+            newGlobal->setAlignment(globalL.getAlign());
+            for (auto BBL = src->begin(), BBR = dst->begin(); BBL != src->end();
+                 ++BBL, ++BBR) {
+                for (auto InstL = BBL->begin(), InstR = BBR->begin();
+                     InstL != BBL->end();
+                     ++InstL, ++InstR) {
+                    for (auto OpL = InstL->op_begin(), OpR = InstR->op_begin();
+                         OpL != InstL->op_end();
+                         ++OpL, ++OpR) {
+                        if (OpL->get()->getValueID() == globalL.getValueID()) {
+                            OpR->get()->replaceAllUsesWith(newGlobal);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     return dst;
 }
 
