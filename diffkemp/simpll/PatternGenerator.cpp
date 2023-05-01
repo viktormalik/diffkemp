@@ -349,6 +349,31 @@ Function *cloneFunction(Module *dstMod,
     SmallVector<llvm::ReturnInst *, 8> returns;
     CloneFunctionInto(
             dst, src, tmpValueMap, changeType, returns, "", nullptr, remapper);
+    /// Provide declaration of used functions
+    for (auto &BB : *dst) {
+        for (auto &Inst : BB) {
+            if (auto call = dyn_cast<CallInst>(&Inst)) {
+                auto calledFun = call->getCalledFunction();
+                bool found = false;
+                for (auto &func : dstMod->functions()) {
+                    if (prefix + calledFun->getName().str()
+                        == func.getName().str()) {
+                        call->setCalledFunction(&func);
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    call->setCalledFunction(
+                            Function::Create(calledFun->getFunctionType(),
+                                             calledFun->getLinkage(),
+                                             prefix + calledFun->getName(),
+                                             dst->getParent()));
+                }
+            }
+        }
+    }
+
     return dst;
 }
 
