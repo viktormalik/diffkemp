@@ -618,15 +618,7 @@ bool PatternGenerator::addFunctionToPattern(Module *mod,
         BBR++;
         BBL++;
     }
-    for (auto &var : variants) {
-        switch (var.kind) {
-        case InstructionVariant::TYPE:
-            if (auto s = dyn_cast<StructType>(var.newType)) {
-                std::cout << "New Type Name: " << s->getStructName().str()
-                          << std::endl;
-            }
-        }
-    }
+
     /// We want to insert even empty variants, as we want to make pairings
     this->patterns[patternName]->variants.push_back(variants);
     /// Mapping of new function arguments to new parameters
