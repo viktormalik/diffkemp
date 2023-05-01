@@ -17,8 +17,20 @@ std::unique_ptr<Module> PatternRepresentation::generateVariant(
     /// even empty ones.
     assert(variants.size() % 2 == 0);
 
-    auto VarFunL = cloneFunction(varMod.get(), functions.first);
-    auto VarFunR = cloneFunction(varMod.get(), functions.second);
+    /// Perform no variation, if both variation vectors are empty.
+    if (var.first.empty() && var.second.empty()) {
+        return varMod;
+    }
+    auto VarFunL = cloneFunction(varMod.get(),
+                                 functions.first,
+                                 "",
+                                 {},
+                                 Type::getVoidTy(varMod->getContext()));
+    auto VarFunR = cloneFunction(varMod.get(),
+                                 functions.second,
+                                 "",
+                                 {},
+                                 Type::getVoidTy(varMod->getContext()));
 
     applyVariant(var.first, VarFunL, true);
     applyVariant(var.second, VarFunR, false);
@@ -236,6 +248,7 @@ Function *cloneFunction(Module *dstMod,
                         Function *src,
                         std::string prefix,
                         std::vector<Type *> newArgTypes,
+                        Type *newReturnType,
                         StructTypeRemapper *remapper) {
     /// Merge new function argument types with new types and popule one from
     /// the source with value mapping between source and destination functions.
@@ -243,8 +256,13 @@ Function *cloneFunction(Module *dstMod,
     for (auto &newArgType : newArgTypes) {
         newFunTypeParams.push_back(newArgType);
     }
-    auto newFunType =
-            FunctionType::get(src->getReturnType(), newFunTypeParams, false);
+    FunctionType *newFunType;
+    if (!newReturnType) {
+        newFunType = FunctionType::get(
+                src->getReturnType(), newFunTypeParams, false);
+    } else {
+        newFunType = FunctionType::get(newReturnType, newFunTypeParams, false);
+    }
     auto dst = Function::Create(
             newFunType, src->getLinkage(), prefix + src->getName(), dstMod);
     llvm::ValueToValueMapTy tmpValueMap;

@@ -218,6 +218,7 @@ Function *cloneFunction(Module *dstMod,
                         Function *src,
                         std::string prefix = "",
                         std::vector<Type *> newArgs = {},
+                        Type *newReturnType = nullptr,
                         StructTypeRemapper *remapper = nullptr);
 
 void remapVariants(Function *src,
