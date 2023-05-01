@@ -55,6 +55,13 @@ class StructTypeRemapper : public ValueMapTypeRemapper {
 };
 
 struct InstructionVariant {
+    struct GlobalVariableInfo {
+        std::string name;
+        Type *type;
+        GlobalVariable::LinkageTypes linkage;
+        MaybeAlign align;
+    };
+
     enum Kind {
         TYPE,
         GLOBAL,
@@ -67,13 +74,20 @@ struct InstructionVariant {
                        GlobalVariable *global,
                        size_t opPos = 0)
             : inst(encounterInst), kind(InstructionVariant::GLOBAL),
-              newGlobal(global), opPos(opPos){};
+              newGlobal(global), opPos(opPos) {
+        newGlobalInfo = GlobalVariableInfo{};
+        newGlobalInfo.type = global->getType();
+        newGlobalInfo.name = global->getName().str();
+        newGlobalInfo.linkage = global->getLinkage();
+        newGlobalInfo.align = global->getAlign();
+    };
 
     Instruction *inst;
     Kind kind;
     Type *newType{nullptr};
     GlobalVariable *newGlobal{nullptr};
-    size_t opPos;
+    unsigned opPos;
+    GlobalVariableInfo newGlobalInfo;
 };
 
 class PatternRepresentation {

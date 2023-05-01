@@ -367,6 +367,7 @@ bool PatternGenerator::addFunctionToPattern(Module *mod,
                 continue;
             }
             /// Same operations shouldn't have different operands count
+            unsigned i = 0;
             for (auto OpL = InL->op_begin(), OpR = InR->op_begin();
                  OpL != InL->op_end() && OpR != InR->op_end();
                  ++OpL, ++OpR) {
@@ -381,11 +382,16 @@ bool PatternGenerator::addFunctionToPattern(Module *mod,
                         // Skip if operand is a global variable
                         if (isValueGlobal(*OpL->get(),
                                           *PatternFun->getParent())) {
+                            GlobalVariable *gvar =
+                                    dyn_cast<GlobalVariable>(OpR->get());
+                            variants.emplace_back(&(*InL), gvar, i);
+                            ++i;
                             continue;
                         }
                         /// Value is already parametrized
                         if (parametrizedValues.find(OpL->get())
                             != parametrizedValues.end()) {
+                            ++i;
                             continue;
                         }
                         /// difference is in the value
@@ -396,6 +402,7 @@ bool PatternGenerator::addFunctionToPattern(Module *mod,
                                          markedValues.end(),
                                          pp)
                                        != markedValues.end()) {
+                            ++i;
                             continue;
                         }
                         futureParamTypes.push_back(OpL->get()->getType());
@@ -415,6 +422,7 @@ bool PatternGenerator::addFunctionToPattern(Module *mod,
                         parametrizedValues.insert(OpL->get());
                     }
                 }
+                ++i;
             }
             InR++;
             InL++;
