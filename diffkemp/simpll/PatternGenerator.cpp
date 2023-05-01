@@ -129,65 +129,71 @@ PatternGenerator::MinimalModuleAnalysis::MinimalModuleAnalysis(Config &conf) {
     addFunPair(std::make_pair(conf.FirstFun, conf.SecondFun));
 }
 
-void PatternGenerator::determinePatternRange(PatternRepresentation *PatRep) {
-    Config conf{PatRep->functions.first->getName().str(),
-                PatRep->functions.second->getName().str(),
-                PatRep->mod.get(),
-                PatRep->mod.get()};
+void PatternGenerator::determinePatternRange(PatternRepresentation *PatRep,
+                                             Module &mod) {
+    auto FunL = mod.getFunction(PatRep->functions.first->getName());
+    auto FunR = mod.getFunction(PatRep->functions.second->getName());
+
+    Config conf{FunL->getName().str(), FunR->getName().str(), &mod, &mod};
 
     auto semDiff = MinimalModuleAnalysis(conf);
 
-    auto BBL = PatRep->functions.first->begin();
-    auto BBR = PatRep->functions.second->begin();
     bool insidePatternValueRange = false;
-    while (BBL != PatRep->functions.first->end()
-           && BBR != PatRep->functions.second->end()) {
-        auto InL = BBL->begin();
-        auto InR = BBR->begin();
-        while (InL != BBL->end() || InR != BBR->end()) {
-            if (semDiff->maySkipInstruction(&(*InL))) {
-                InL++;
-                continue;
-            }
-            if (semDiff->maySkipInstruction(&(*InR))) {
-                InR++;
-                continue;
-            }
-
-            /// WARNING: This way of registration is really fishy, I should add
-            /// some kind of checking to it. Otherwise, I may not actually
-            /// catch some nasty bug.
-            if (semDiff->cmpOperationsWithOperands(&(*InL), &(*InR))) {
-                if (!insidePatternValueRange) { // and difference is in type
-                                                // or value
-                    InL->setMetadata(
+    for (auto BBL = FunL->begin(), BBR = FunR->begin();
+         BBL != FunL->end() || BBR != FunR->end();
+         ++BBL, ++BBR) {
+        for (auto InstL = BBL->begin(), InstR = BBR->begin();
+             InstL != BBL->end() || InstR != BBR->end();
+             ++InstL, ++InstR) {
+            if (semDiff->cmpOperationsWithOperands(&(*InstL), &(*InstR)) != 0) {
+                if (!PatRep->isMetadataSet || &mod != PatRep->mod.get()) {
+                    /// Metadata needs to be registered in the module, but
+                    /// for some reason they are not accessible the first
+                    /// time that they are used.
+                    InstL->setMetadata(
                             "diffkemp.pattern",
                             PatRep->MDMap
                                     [PatternRepresentation::PATTERN_START]);
-                    InR->setMetadata(
-                            PatRep->mod->getMDKindID("diffkemp.pattern"),
+                    PatRep->isMetadataSet = true;
+                } else {
+                    InstL->setMetadata(
+                            mod.getMDKindID("diffkemp.pattern"),
                             PatRep->MDMap
                                     [PatternRepresentation::PATTERN_START]);
-                    insidePatternValueRange = true;
                 }
+                InstR->setMetadata(
+                        mod.getMDKindID("diffkemp.pattern"),
+                        PatRep->MDMap[PatternRepresentation::PATTERN_START]);
+                insidePatternValueRange = true;
+                break;
             }
-            if (insidePatternValueRange) {
-                if (InR->isTerminator()) {
-                    InR->setMetadata(
-                            PatRep->mod->getMDKindID("diffkemp.pattern"),
-                            PatRep->MDMap[PatternRepresentation::PATTERN_END]);
-                }
-                if (InL->isTerminator()) {
-                    InL->setMetadata(
-                            PatRep->mod->getMDKindID("diffkemp.pattern"),
-                            PatRep->MDMap[PatternRepresentation::PATTERN_END]);
-                }
-            }
-            InR++;
-            InL++;
         }
-        BBR++;
-        BBL++;
+        if (insidePatternValueRange) {
+            break;
+        }
+    }
+
+    if (!insidePatternValueRange) {
+        return;
+    }
+
+    for (auto &BBL : *FunL) {
+        for (auto &InstL : BBL) {
+            if (auto RetInst = dyn_cast<ReturnInst>(&InstL)) {
+                RetInst->setMetadata(
+                        mod.getMDKindID("diffkemp.pattern"),
+                        PatRep->MDMap[PatternRepresentation::PATTERN_END]);
+            }
+        }
+    }
+    for (auto &BBR : *FunR) {
+        for (auto &InstR : BBR) {
+            if (auto RetInst = dyn_cast<ReturnInst>(&InstR)) {
+                RetInst->setMetadata(
+                        mod.getMDKindID("diffkemp.pattern"),
+                        PatRep->MDMap[PatternRepresentation::PATTERN_END]);
+            }
+        }
     }
 }
 
@@ -532,7 +538,8 @@ bool PatternGenerator::addFunctionPairToPattern(
         /// specific pattern that we can infere, thus generation have
         /// been successful and we are returning true.
         // TODO: Uncomment me for final version
-        this->determinePatternRange(this->patterns[patternName].get());
+        this->determinePatternRange(this->patterns[patternName].get(),
+                                    *this->patterns[patternName]->mod.get());
         return true;
     }
 
@@ -547,7 +554,8 @@ bool PatternGenerator::addFunctionPairToPattern(
             FunR,
             patternName);
     this->patterns[patternName]->refreshFunctions();
-    this->determinePatternRange(this->patterns[patternName].get());
+    this->determinePatternRange(this->patterns[patternName].get(),
+                                *this->patterns[patternName]->mod.get());
 
     if (!resultL || !resultR) {
         this->patterns.erase(patternName);

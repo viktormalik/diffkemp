@@ -130,6 +130,7 @@ class PatternRepresentation {
     std::pair<std::string, std::string> funNames;
     std::pair<Function *, Function *> functions;
     std::vector<std::vector<InstructionVariant>> variants;
+    bool isMetadataSet{false};
 
   private:
     enum Metadata {
@@ -169,6 +170,8 @@ class PatternGenerator {
         return patterns[patternName].get();
     }
 
+    void determinePatternRange(PatternRepresentation *PatRep, Module &mod);
+
   private:
     class MinimalModuleAnalysis {
       public:
@@ -207,7 +210,6 @@ class PatternGenerator {
 
     // DifferentialFunctionComparator diffFunComp;
     void attachMetadata(Instruction *instr, std::string metadataStr);
-    void determinePatternRange(PatternRepresentation *PatRep);
 
     bool isValueGlobal(Value &val, Module &mod);
 };
