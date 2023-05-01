@@ -307,6 +307,32 @@ Function *cloneFunction(Module *dstMod,
                 }
             }
         }
+
+        /// Check if source module has any structure types that have suffix,
+        /// that is because of the shared context of read IR. Try to remap the
+        /// structure to it's variant without suffix in the destination module.
+        ///
+        /// If there is non, then create it and then remap source to it.
+        for (auto &sTypeL : src->getParent()->getIdentifiedStructTypes()) {
+            if (hasSuffix(sTypeL->getStructName().str())) {
+                auto nameWithoutSuffix =
+                        dropSuffix(sTypeL->getStructName().str());
+                bool found = false;
+                for (auto &sTypeR : dstMod->getIdentifiedStructTypes()) {
+                    if (nameWithoutSuffix == sTypeR->getStructName().str()) {
+                        tmpRemapper->addNewMapping(sTypeL, sTypeR);
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    auto sTypeR = StructType::create(dstMod->getContext(),
+                                                     sTypeL->elements(),
+                                                     nameWithoutSuffix);
+                    tmpRemapper->addNewMapping(sTypeL, sTypeR);
+                }
+            }
+        }
         if (!tmpRemapper->empty()) {
             remapper = tmpRemapper.get();
         }
