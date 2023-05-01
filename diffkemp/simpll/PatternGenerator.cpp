@@ -5,6 +5,24 @@ void PatternRepresentation::refreshFunctions() {
     functions.second = mod->getFunction(funNames.second);
 }
 
+void PatternRepresentation::mapFunctionOutput(Function &fun) {
+    for (auto &BB : fun) {
+        for (auto &Inst : BB) {
+            if (auto RetInst = dyn_cast<ReturnInst>(&Inst)) {
+                CallInst::Create(OutputMappingFun->getFunctionType(),
+                                 OutputMappingFun,
+                                 ArrayRef<Value *>(RetInst->getReturnValue()),
+                                 "",
+                                 RetInst);
+                ReplaceInstWithInst(
+                        RetInst,
+                        ReturnInst::Create(fun.getContext(), nullptr, RetInst));
+                break;
+            }
+        }
+    }
+}
+
 std::unique_ptr<Module> PatternRepresentation::generateVariant(
         std::pair<std::vector<InstructionVariant>,
                   std::vector<InstructionVariant>> var,
@@ -34,6 +52,10 @@ std::unique_ptr<Module> PatternRepresentation::generateVariant(
 
     applyVariant(var.first, VarFunL, true);
     applyVariant(var.second, VarFunR, false);
+
+    /// Apply output mapping
+    mapFunctionOutput(*VarFunL);
+    mapFunctionOutput(*VarFunR);
 
     return varMod;
 }

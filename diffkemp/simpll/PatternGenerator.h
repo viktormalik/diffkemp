@@ -100,8 +100,11 @@ class PatternRepresentation {
     /// construction. But on the other hand, there is no reason to make the
     /// context public.
     LLVMContext context;
+    Function *OutputMappingFun;
+
     void replaceStructRelatedInst(Instruction &Inst, InstructionVariant &var);
     void replaceGlobalRelatedInst(Instruction &inst, InstructionVariant &var);
+    void mapFunctionOutput(Function &fun);
 
   public:
     PatternRepresentation(std::string name,
@@ -115,7 +118,15 @@ class PatternRepresentation {
                                   MDString::get(context, "pattern-start"))},
                      {PATTERN_END,
                       MDNode::get(context,
-                                  MDString::get(context, "pattern-end"))}}){};
+                                  MDString::get(context, "pattern-end"))}}) {
+        auto outputMappingFunType =
+                FunctionType::get(Type::getVoidTy(context), true);
+        OutputMappingFun =
+                Function::Create(outputMappingFunType,
+                                 GlobalValue::LinkageTypes::InternalLinkage,
+                                 "diffkemp.output_mapping",
+                                 mod.get());
+    };
     void refreshFunctions();
 
     std::unique_ptr<Module>
