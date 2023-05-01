@@ -251,7 +251,8 @@ Function *cloneFunction(Module *dstMod,
                         Type *newReturnType,
                         StructTypeRemapper *remapper) {
     /// Merge new function argument types with new types and popule one from
-    /// the source with value mapping between source and destination functions.
+    /// the source with value mapping between source and destination
+    /// functions.
     auto newFunTypeParams = src->getFunctionType()->params().vec();
     for (auto &newArgType : newArgTypes) {
         newFunTypeParams.push_back(newArgType);
@@ -272,12 +273,12 @@ Function *cloneFunction(Module *dstMod,
         tmpValueMap[&arg] = &(*patternFuncArgIter++);
     }
 
-    /// If function contains any structure types, that are already present in
-    /// the destination context (comparison is done by name only), then remap
-    /// instances of the source structure type to destination contexts structure
-    /// type.
     auto tmpRemapper = std::make_unique<StructTypeRemapper>();
     if (!remapper) {
+        /// If function contains any structure types, that are already present
+        /// in the destination context (comparison is done by name only), then
+        /// remap instances of the source structure type to destination contexts
+        /// structure type.
         std::vector<StructType *> foundStructTypes;
         for (auto &BB : *src) {
             for (auto &Inst : BB) {
@@ -361,8 +362,8 @@ bool PatternGenerator::addFunctionToPattern(Module *mod,
                 mod};
     auto semDiff = MinimalModuleAnalysis(conf);
 
-    /// Create a temporary function, that is going to be augmented, if inference
-    /// succeeds, then it is going to replace the PatternFun
+    /// Create a temporary function, that is going to be augmented, if
+    /// inference succeeds, then it is going to replace the PatternFun
 
     auto BBL = PatternFun->begin();
     auto BBR = CandidateFun->begin();
@@ -376,8 +377,8 @@ bool PatternGenerator::addFunctionToPattern(Module *mod,
         auto InR = BBR->begin();
         while (InL != BBL->end() || InR != BBR->end()) {
             if (InL->getOpcode() != InR->getOpcode()) {
-                /// We cannot create a pattern from code snippets with differing
-                /// operations.
+                /// We cannot create a pattern from code snippets with
+                /// differing operations.
                 return false;
             }
             auto AllocaL = dyn_cast<AllocaInst>(InL);
@@ -421,8 +422,8 @@ bool PatternGenerator::addFunctionToPattern(Module *mod,
             for (auto OpL = InL->op_begin(), OpR = InR->op_begin();
                  OpL != InL->op_end() && OpR != InR->op_end();
                  ++OpL, ++OpR) {
-                /// Elementar types usually use different instructions, hence
-                /// at this point they are already out of the game.
+                /// Elementar types usually use different instructions,
+                /// hence at this point they are already out of the game.
                 auto OpTypeL = OpL->get()->getType();
                 auto OpTypeR = OpR->get()->getType();
                 if (OpTypeL != OpTypeR) {
@@ -491,6 +492,7 @@ bool PatternGenerator::addFunctionToPattern(Module *mod,
     }
     /// We want to insert even empty variants, as we want to make pairings
     this->patterns[patternName]->variants.push_back(variants);
+    /// Mapping of new function arguments to new parameters
     if (tmpFun) {
         for (BBL = PatternFun->begin(), BBR = tmpFun->begin();
              BBL != PatternFun->end();

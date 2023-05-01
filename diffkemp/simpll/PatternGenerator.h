@@ -198,10 +198,6 @@ class PatternGenerator {
         StructureDebugInfoAnalysis::Result StructDIMapL{};
         StructureDebugInfoAnalysis::Result StructDIMapR{};
     };
-    /// Config is needed for invocation of DifferentialFunctionComparator class
-    /// But it is going to be initialized everytime new function in the pattern
-    /// config is found.
-    // const Config &config;
     /// This has to be mutable in order to pass it to llvm::parseIRFile
     mutable LLVMContext firstCtx;
     mutable LLVMContext secondCtx;
