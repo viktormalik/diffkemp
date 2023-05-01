@@ -26,37 +26,68 @@ std::unique_ptr<Module> PatternRepresentation::generateVariant(
     return varMod;
 }
 
-void PatternRepresentation::applyVariant(std::vector<InstructionVariant> &var,
+void PatternRepresentation::replaceStructRelatedInst(Instruction &Inst,
+                                                     InstructionVariant &var) {
+    if (auto InstAlloca = dyn_cast<AllocaInst>(&Inst)) {
+        auto NewInstAlloca = new AllocaInst(var.newType, 0, "", &Inst);
+        NewInstAlloca->setAlignment(InstAlloca->getAlign());
+        InstAlloca->replaceAllUsesWith(NewInstAlloca);
+        InstAlloca->eraseFromParent();
+    } else if (auto InstGep = dyn_cast<GetElementPtrInst>(&Inst)) {
+        std::vector<Value *> operands;
+        for (auto &op : InstGep->operands()) {
+            operands.push_back(op);
+        }
+        auto ptr = operands[0];
+        operands.erase(operands.begin());
+        auto NewInstGep = GetElementPtrInst::Create(
+                var.newType, ptr, operands, "", InstGep);
+        InstGep->replaceAllUsesWith(NewInstGep);
+        InstGep->eraseFromParent();
+    }
+}
+
+void PatternRepresentation::replaceGlobalRelatedInst(Instruction &Inst,
+                                                     InstructionVariant &var) {
+    GlobalVariable *newGlobal = nullptr;
+    auto varMod = Inst.getParent()->getParent()->getParent();
+    for (auto &global : mod->globals()) {
+        if (var.newGlobal->getName() == global.getName()) {
+            newGlobal = &global;
+            break;
+        }
+    }
+    if (!newGlobal) {
+        newGlobal = new GlobalVariable(*varMod,
+                                       var.newGlobalInfo.type,
+                                       false,
+                                       var.newGlobalInfo.linkage,
+                                       0,
+                                       var.newGlobalInfo.name);
+        newGlobal->setAlignment(var.newGlobalInfo.align);
+    }
+    Inst.getOperandUse(var.opPos).set(newGlobal);
+}
+
+void PatternRepresentation::applyVariant(std::vector<InstructionVariant> &vars,
                                          Function *VarFun,
                                          bool isLeftSide) {
     Function *Fun = isLeftSide ? functions.first : functions.second;
-    auto varIter = var.begin();
-    while (varIter != var.end()) {
+    for (auto &var : vars) {
         bool found = false;
         for (auto BBL = Fun->begin(), BBR = VarFun->begin(); BBL != Fun->end();
              ++BBL, ++BBR) {
             for (auto InstL = BBL->begin(), InstR = BBR->begin();
                  InstL != BBL->end();
                  ++InstL, ++InstR) {
-                if (&(*InstL) == varIter->inst) {
-                    if (auto InstAlloca = dyn_cast<AllocaInst>(&(*InstR))) {
-                        auto NewInstAlloca = new AllocaInst(
-                                varIter->newType, 0, "", &(*InstR));
-                        NewInstAlloca->setAlignment(InstAlloca->getAlign());
-                        InstAlloca->replaceAllUsesWith(NewInstAlloca);
-                        InstAlloca->eraseFromParent();
-                    } else if (auto InstGep =
-                                       dyn_cast<GetElementPtrInst>(&(*InstR))) {
-                        std::vector<Value *> operands;
-                        for (auto &op : InstGep->operands()) {
-                            operands.push_back(op);
-                        }
-                        auto ptr = operands[0];
-                        operands.erase(operands.begin());
-                        auto NewInstGep = GetElementPtrInst::Create(
-                                varIter->newType, ptr, operands, "", InstGep);
-                        InstGep->replaceAllUsesWith(NewInstGep);
-                        InstGep->eraseFromParent();
+                if (&(*InstL) == var.inst) {
+                    switch (var.kind) {
+                    case InstructionVariant::TYPE:
+                        replaceStructRelatedInst(*InstR, var);
+                        break;
+                    case InstructionVariant::GLOBAL:
+                        replaceGlobalRelatedInst(*InstR, var);
+                        break;
                     }
                     found = true;
                     break;
@@ -65,11 +96,6 @@ void PatternRepresentation::applyVariant(std::vector<InstructionVariant> &var,
             if (found) {
                 break;
             }
-        }
-        if (found) {
-            var.erase(varIter);
-        } else {
-            ++varIter;
         }
     }
 }

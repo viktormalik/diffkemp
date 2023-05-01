@@ -22,6 +22,7 @@
 #include <llvm/Support/SourceMgr.h>
 #include <llvm/Support/YAMLTraits.h>
 #include <llvm/Support/raw_ostream.h>
+#include <llvm/Transforms/Utils/BasicBlockUtils.h>
 #include <llvm/Transforms/Utils/Cloning.h>
 
 using namespace llvm;
@@ -85,6 +86,8 @@ class PatternRepresentation {
     /// construction. But on the other hand, there is no reason to make the
     /// context public.
     LLVMContext context;
+    void replaceStructRelatedInst(Instruction &Inst, InstructionVariant &var);
+    void replaceGlobalRelatedInst(Instruction &inst, InstructionVariant &var);
 
   public:
     PatternRepresentation(std::string name,
