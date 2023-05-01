@@ -231,7 +231,7 @@ void remapVariants(Function *src,
                    Function *dst,
                    std::vector<InstructionVariant> &vars) {
     for (auto BBL = src->begin(), BBR = dst->begin(); BBL != src->end();
-         ++BBL) {
+         ++BBL, ++BBR) {
         for (auto InstL = BBL->begin(), InstR = BBR->begin();
              InstL != BBL->end();
              ++InstL, ++InstR) {
