@@ -409,6 +409,64 @@ Function *cloneFunction(Module *dstMod,
     return dst;
 }
 
+void PatternGenerator::reduceFunctions(PatternRepresentation &patRep) {
+    std::vector<std::string> funNames;
+    for (auto &fun : patRep.mod->getFunctionList()) {
+        funNames.push_back(fun.getName().str());
+    }
+    for (auto &funName : funNames) {
+        auto fun = patRep.mod->getFunction(funName);
+        if (fun) {
+            /// We don't want to reduce the pattern functions, only the
+            /// supporting ones.
+            if (fun == patRep.functions.first
+                || fun == patRep.functions.second) {
+                continue;
+            }
+            if (hasSuffix(fun->getName().str())) {
+                continue;
+            }
+
+            auto name = fun->getName().str();
+            if (!(name.rfind("diffkemp.", 0) == 0)) {
+                /// Name does not have diffkemp in the front
+                continue;
+            }
+            auto otherFunName = name;
+            if (name.rfind("diffkemp.old.", 0) == 0) {
+                otherFunName.replace(9, 3, "new");
+            } else {
+                otherFunName.replace(9, 3, "old");
+            }
+
+            auto other = patRep.mod->getFunction(otherFunName);
+            if (!other) {
+                /// reduce
+                continue;
+            }
+            Config conf{fun->getName().str(),
+                        other->getName().str(),
+                        patRep.mod.get(),
+                        patRep.mod.get()};
+            auto semDiff = MinimalModuleAnalysis(conf);
+            if (!semDiff->compareSignature()) {
+                auto newFunName = std::string(name.begin() + 14, name.end());
+                auto ff = patRep.mod->getFunction(newFunName);
+                if (!ff) {
+                    ff = Function::Create(fun->getFunctionType(),
+                                          fun->getLinkage(),
+                                          newFunName,
+                                          fun->getParent());
+                }
+                fun->replaceAllUsesWith(ff);
+                other->replaceAllUsesWith(ff);
+                fun->eraseFromParent();
+                other->eraseFromParent();
+            }
+        }
+    }
+}
+
 bool PatternGenerator::addFunctionToPattern(Module *mod,
                                             Function *PatternFun,
                                             Function *CandidateFun,
@@ -643,6 +701,7 @@ bool PatternGenerator::addFunctionPairToPattern(
         // TODO: Uncomment me for final version
         this->determinePatternRange(this->patterns[patternName].get(),
                                     *this->patterns[patternName]->mod.get());
+        this->reduceFunctions(*(patterns[patternName].get()));
         return true;
     }
 
@@ -659,6 +718,7 @@ bool PatternGenerator::addFunctionPairToPattern(
     this->patterns[patternName]->refreshFunctions();
     this->determinePatternRange(this->patterns[patternName].get(),
                                 *this->patterns[patternName]->mod.get());
+    this->reduceFunctions(*(patterns[patternName].get()));
 
     if (!resultL || !resultR) {
         this->patterns.erase(patternName);

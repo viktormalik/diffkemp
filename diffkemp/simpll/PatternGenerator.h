@@ -207,6 +207,11 @@ class PatternGenerator {
     // DifferentialFunctionComparator diffFunComp;
     void attachMetadata(Instruction *instr, std::string metadataStr);
 
+    /// Functions should be marked as new and old only if they differ, therefore
+    /// this functions checks signatures of all functions and if they are the
+    /// same except for name prefix, then they are going to be reduced.
+    void reduceFunctions(PatternRepresentation &patRep);
+
     bool isValueGlobal(Value &val, Module &mod);
 };
 
