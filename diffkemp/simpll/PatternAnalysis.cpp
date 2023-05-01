@@ -49,10 +49,10 @@ void readPatternConfig(std::string configPath) {
                 }
             }
         } else {
-            std::cout << Color::makeRed("Generation of pattern ")
-                      << Color::makeRed(" failed: ") << "pattern '"
-                      << pattern.name << "' could not be generated"
-                      << std::endl;
+            llvm::outs() << Color::makeRed("Generation of pattern ")
+                         << Color::makeRed(" failed: ") << "pattern '"
+                         << pattern.name << "' could not be generated"
+                         << "\n";
         }
     }
 }
