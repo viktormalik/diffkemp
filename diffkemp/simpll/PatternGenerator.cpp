@@ -641,15 +641,15 @@ bool PatternGenerator::addFunctionToPattern(Module *mod,
                         }
                     }
                 }
-                InR->copyMetadata(*InL);
             }
         }
-        auto pastFunName = PatternFun->getName();
 
         for (auto &var : this->patterns[patternName]->variants) {
             remapVariants(PatternFun, tmpFun, var);
         }
 
+        auto pastFunName = PatternFun->getName();
+        PatternFun->replaceAllUsesWith(tmpFun);
         PatternFun->eraseFromParent();
         tmpFun->setName(pastFunName);
 
