@@ -16,6 +16,7 @@
 #include "Config.h"
 #include "ModuleAnalysis.h"
 #include "Output.h"
+#include "PatternAnalysis.h"
 #include "library/DiffKempUtils.h"
 #include "library/SysctlTable.h"
 #include "passes/CalledFunctionsAnalysis.h"
@@ -81,7 +82,7 @@ void freePointerArray(struct ptr_array PtrArr) { delete[] PtrArr.arr; }
 
 void freeStringArray(struct ptr_array PtrArr) {
     for (unsigned long i = 0; i < PtrArr.len; i++)
-        delete[](char *) PtrArr.arr[i];
+        delete[] (char *)PtrArr.arr[i];
 
     freePointerArray(PtrArr);
 }
@@ -216,6 +217,8 @@ struct kernel_param getData(const char *Sysctl, void *SysctlTableRaw) {
                         indices,
                         Result.indices.size()};
 }
+
+void runGeneratePattern(const char *path) { readPatternConfig(path); }
 
 /// Simplifies modules and compares the specified functions.
 void runSimpLL(void *ModL,

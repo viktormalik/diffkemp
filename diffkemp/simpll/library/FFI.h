@@ -92,6 +92,8 @@ struct kernel_param getChild(const char *Sysctl, void *SysctlTableRaw);
 /// Get the data variable for the given sysctl option.
 struct kernel_param getData(const char *Sysctl, void *SysctlTableRaw);
 
+void runGeneratePattern(const char *path);
+
 /// Simplifies modules and compares the specified functions.
 void runSimpLL(void *ModL,
                void *ModR,

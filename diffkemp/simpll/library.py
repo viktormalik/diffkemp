@@ -4,6 +4,10 @@ Python interface for the SimpLL library.
 from diffkemp.simpll.simpll_lib import ffi, lib
 
 
+def run_generate_pattern(path):
+    lib.runGeneratePattern(ffi.new("char []", path.encode("ascii")))
+
+
 def _ptrarray_to_list(ptrarray):
     """Converts a ptr_array structure from SimpLL into a Python list."""
     result = []
@@ -30,6 +34,7 @@ def _stringarray_to_list(ptrarray):
 
 class SimpLLModule:
     """Represents a Module class in LLVM."""
+
     def __init__(self, path):
         self.pointer = lib.loadModule(ffi.new("char []", path.encode("ascii")))
         if self.pointer == ffi.NULL:
@@ -86,6 +91,7 @@ class SimpLLModule:
 
 class SimpLLFunction:
     """Represents a Function class in LLVM."""
+
     def __init__(self, module, pointer):
         self.module = module
         self.pointer = pointer
