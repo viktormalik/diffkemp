@@ -116,6 +116,9 @@ def make_argument_parser():
                             help="compare only selected function")
     compare_ap.add_argument("--custom-patterns", "-p",
                             help="custom pattern file or configuration")
+    compare_ap.add_argument("--use-smt",
+                            help="Use SMT-based checking of short snippets",
+                            action="store_true")
     compare_ap.add_argument("--output-llvm-ir",
                             help="output each simplified module to a file",
                             action="store_true")

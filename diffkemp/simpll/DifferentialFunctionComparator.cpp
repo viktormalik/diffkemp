@@ -1120,6 +1120,9 @@ int DifferentialFunctionComparator::cmpBasicBlocks(
                 }
             }
 
+            if (Res && config.UseSMT)
+                Res = SMTComparator->compare(InstL, InstR);
+
             if (Res)
                 return Res;
         } else {

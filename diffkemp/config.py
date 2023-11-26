@@ -118,6 +118,7 @@ class Config:
         output_llvm_ir=False,
         custom_pattern_config=None,
         builtin_patterns=BuiltinPatterns(),
+        use_smt=False,
         print_asm_diffs=False,
         extended_stat=False,
         verbosity=0,
@@ -132,6 +133,7 @@ class Config:
         :param full_diff: Evaluate semantics-preserving syntax differences too.
         :param output_llvm_ir: Output each simplified module into a file.
         :param custom_pattern_config: Valid custom pattern configuration.
+        :param use_smt: Enable SMT-based checking of short snippets.
         :param builtin_patterns: Configuration of built-in patterns.
         :param print_asm_diffs: Print assembly differences.
         :param extended_stat: Gather extended statistics.
@@ -147,6 +149,7 @@ class Config:
         self.output_llvm_ir = output_llvm_ir
         self.custom_pattern_config = custom_pattern_config
         self.builtin_patterns = builtin_patterns
+        self.use_smt = use_smt
         self.print_asm_diffs = print_asm_diffs
         self.extended_stat = extended_stat
         self.verbosity = verbosity
@@ -196,6 +199,7 @@ class Config:
             full_diff=args.full_diff,
             custom_pattern_config=custom_pattern_config,
             builtin_patterns=builtin_patterns,
+            use_smt=args.use_smt,
             output_llvm_ir=args.output_llvm_ir,
             print_asm_diffs=args.print_asm_diffs,
             extended_stat=args.extended_stat,

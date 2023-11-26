@@ -40,6 +40,7 @@ Config::Config(std::string FirstFunName,
                std::string CacheDir,
                std::string CustomPatternConfigPath,
                BuiltinPatterns Patterns,
+               bool UseSMT,
                std::string Variable,
                bool OutputLlvmIR,
                bool PrintAsmDiffs,
@@ -49,9 +50,10 @@ Config::Config(std::string FirstFunName,
         : FirstFunName(FirstFunName), SecondFunName(SecondFunName),
           First(FirstModule), Second(SecondModule), FirstOutFile(FirstOutFile),
           SecondOutFile(SecondOutFile), CacheDir(CacheDir),
-          CustomPatternConfigPath(CustomPatternConfigPath), Patterns(Patterns),
-          OutputLlvmIR(OutputLlvmIR), PrintAsmDiffs(PrintAsmDiffs),
-          PrintCallStacks(PrintCallStacks), ExtendedStat(ExtendedStat) {
+          CustomPatternConfigPath(CustomPatternConfigPath), UseSMT(UseSMT),
+          Patterns(Patterns), OutputLlvmIR(OutputLlvmIR),
+          PrintAsmDiffs(PrintAsmDiffs), PrintCallStacks(PrintCallStacks),
+          ExtendedStat(ExtendedStat) {
     refreshFunctions();
 
     if (!Variable.empty()) {
