@@ -910,8 +910,20 @@ bool DifferentialFunctionComparator::cmpCallArgumentUsingCSource(
 /// in the appropriate llvm-lib subdirectory for more details.
 int DifferentialFunctionComparator::cmpBasicBlocks(
         const BasicBlock *BBL, const BasicBlock *BBR) const {
-    BasicBlock::const_iterator InstL = BBL->begin(), InstLE = BBL->end();
-    BasicBlock::const_iterator InstR = BBR->begin(), InstRE = BBR->end();
+    BasicBlock::const_iterator InstL = BBL->begin();
+    BasicBlock::const_iterator InstR = BBR->begin();
+    return cmpBasicBlocksFromInstructions(BBL, BBR, InstL, InstR);
+}
+
+/// Compare basic blocks from the specified instructions.
+int DifferentialFunctionComparator::cmpBasicBlocksFromInstructions(
+        const llvm::BasicBlock *BBL,
+        const llvm::BasicBlock *BBR,
+        BasicBlock::const_iterator InstL,
+        BasicBlock::const_iterator InstR,
+        bool suppressRelocationsAndSMT) const {
+    BasicBlock::const_iterator InstLE = BBL->end();
+    BasicBlock::const_iterator InstRE = BBR->end();
 
     while (InstL != InstLE && InstR != InstRE) {
         if (isDebugInfo(*InstL)) {
@@ -1112,7 +1124,7 @@ int DifferentialFunctionComparator::cmpBasicBlocks(
 
             // Try to find a match by moving one of the instruction iterators
             // forward (find a code relocation).
-            if (config.Patterns.Relocations
+            if (config.Patterns.Relocations && !suppressRelocationsAndSMT
                 && Reloc.status == RelocationInfo::None) {
                 if (findMatchingOpWithOffset(InstL, InstR, Program::Second)
                     || findMatchingOpWithOffset(InstL, InstR, Program::First)) {
@@ -1120,7 +1132,7 @@ int DifferentialFunctionComparator::cmpBasicBlocks(
                 }
             }
 
-            if (Res && config.UseSMT)
+            if (Res && config.UseSMT && !suppressRelocationsAndSMT)
                 Res = SMTComparator->compare(InstL, InstR);
 
             if (Res)

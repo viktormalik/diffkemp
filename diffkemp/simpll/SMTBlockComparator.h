@@ -21,6 +21,18 @@
 
 using namespace llvm;
 
+class SMTException : public std::exception {};
+
+/// An exception thrown when no analyzable code snippets are found, i.e.
+/// there are no snippets after which the remaining basic block instructions
+/// can be synchronized.
+class NoSynchronizationPointException : public SMTException {
+  public:
+    virtual const char *what() const noexcept {
+        return "No synchronization point found";
+    }
+};
+
 /// A class for comparing short sequential code snippets using an SMT solver.
 class SMTBlockComparator {
   public:
@@ -35,8 +47,19 @@ class SMTBlockComparator {
                 BasicBlock::const_iterator &InstR);
 
   private:
+    DenseMap<const Value *, int> sn_mapL_backup;
+    DenseMap<const Value *, int> sn_mapR_backup;
+    std::unordered_map<int, std::pair<const Value *, const Value *>>
+            mappedValuesBySnBackup;
+
     const Config &config;
     const DifferentialFunctionComparator *fComp;
+
+    /// Moves InstL and InstR iterators to the end of the snippet to compare.
+    /// The snippet must be followed by a synchronized instruction. If no such
+    /// instruction is found, the whole basic block is to be considered.
+    void findSnippetEnd(BasicBlock::const_iterator &InstL,
+                        BasicBlock::const_iterator &InstR);
 };
 
 #endif // DIFFKEMP_SMTBLOCKCOMPARATOR_H
