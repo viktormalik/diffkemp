@@ -1,16 +1,13 @@
 """
 Building kernel sources into LLVM IR.
 """
+from diffkemp.llvm_ir.compiler import get_clang_default_options
 from diffkemp.llvm_ir.llvm_module import LlvmModule
 from diffkemp.llvm_ir.llvm_source_finder import LlvmSourceFinder, \
     SourceNotFoundException
-from diffkemp.utils import get_opt_command
+from diffkemp.llvm_ir.optimiser import opt_llvm, BuildException
 import os
 from subprocess import check_call, check_output, CalledProcessError
-
-
-class BuildException(Exception):
-    pass
 
 
 class KernelLlvmSourceBuilder(LlvmSourceFinder):
@@ -344,9 +341,8 @@ class KernelLlvmSourceBuilder(LlvmSourceFinder):
         :return Corresponding Clang command.
         """
         output_file = None
-        command = ["clang", "-S", "-emit-llvm", "-O1", "-Xclang",
-                   "-disable-llvm-passes", "-g", "-fdebug-macro",
-                   "-Wno-format-security"]
+        command = ["clang"]
+        command.extend(get_clang_default_options())
         for param in gcc_command.split():
             if (param == "gcc" or
                     (param.startswith("-W") and "-MD" not in param) or
@@ -408,31 +404,6 @@ class KernelLlvmSourceBuilder(LlvmSourceFinder):
                 llvm_commands.append(
                     KernelLlvmSourceBuilder._ld_to_llvm(command))
         return llvm_commands
-
-    @staticmethod
-    def _opt_llvm(llvm_file):
-        """
-        Optimise LLVM IR using 'opt' tool. LLVM passes are chosen based on the
-        command that created the file being optimized.
-        For compiled files (using clang), run basic simplification passes.
-        For linked files (using llvm-link), run -constmerge to remove
-        duplicate constants that might have come from linked files.
-        """
-        passes = [("lowerswitch", "function"),
-                  ("mem2reg", "function"),
-                  ("loop-simplify", "function"),
-                  ("simplifycfg", "function"),
-                  ("gvn", "function"),
-                  ("dce", "function"),
-                  ("constmerge", "module"),
-                  ("mergereturn", "function"),
-                  ("simplifycfg", "function")]
-        opt_command = get_opt_command(passes, llvm_file)
-        try:
-            with open(os.devnull, "w") as devnull:
-                check_call(opt_command, stderr=devnull)
-        except CalledProcessError:
-            raise BuildException("Running opt failed")
 
     @staticmethod
     def _clean_object(obj):
@@ -586,7 +557,7 @@ class KernelLlvmSourceBuilder(LlvmSourceFinder):
                         raise BuildException(
                             "Could not build {}".format(llvm_file))
                 # Run opt with selected optimisations
-                self._opt_llvm(llvm_file)
+                opt_llvm(llvm_file)
             except BuildException:
                 raise
             finally:
@@ -625,7 +596,7 @@ class KernelLlvmSourceBuilder(LlvmSourceFinder):
                         if not os.path.isfile(obj) or built:
                             check_call(c, stderr=stderr)
             llvm_file = os.path.join(mod_dir, "{}.ll".format(file_name))
-            self._opt_llvm(llvm_file)
+            opt_llvm(llvm_file)
             return llvm_file
         except CalledProcessError:
             raise BuildException("Could not build {}".format(mod_name))
