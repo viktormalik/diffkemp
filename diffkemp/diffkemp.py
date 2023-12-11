@@ -1,6 +1,7 @@
 from diffkemp.building.cc_wrapper import get_cc_wrapper_path, wrapper_env_vars
 from diffkemp.config import Config
 from diffkemp.snapshot import Snapshot
+from diffkemp.llvm_ir.optimiser import opt_llvm, BuildException
 from diffkemp.llvm_ir.kernel_source_tree import KernelSourceTree
 from diffkemp.llvm_ir.kernel_llvm_source_builder import KernelLlvmSourceBuilder
 from diffkemp.llvm_ir.source_tree import SourceTree, SourceNotFoundException
@@ -58,6 +59,8 @@ def build_c_project(args):
         if args.clang_drop is not None
         else "",
         wrapper_env_vars["llvm_link"]: args.llvm_link,
+        wrapper_env_vars["no_opt_override"]: ("1" if args.no_opt_override
+                                              else "0")
     }
     environment.update(os.environ)
 
@@ -113,6 +116,19 @@ def build_c_project(args):
     # Build the project using generated wrapper
     check_call(make_target_args, env=environment)
 
+    # Run LLVM IR simplification passes if the user did not specified
+    # to not override project optimization.
+    if not args.no_opt_override:
+        # Run llvm passes on created LLVM IR files.
+        with open(db_filename, "r") as db_file:
+            for line in [r for r in db_file if r.startswith("o:")]:
+                llvm_file = line.split(":")[1].rstrip()
+                try:
+                    opt_llvm(llvm_file)
+                except BuildException:
+                    # Unsuccessful optimization, leaving as it is.
+                    pass
+
     # Create a new snapshot from the source directory.
     source_finder = WrapperBuildFinder(args.source_dir, db_filename)
     source = SourceTree(args.source_dir, source_finder)
@@ -143,7 +159,8 @@ def build_c_file(args):
     # Create a new snapshot and generate its content.
     source_finder = SingleCBuilder(source_dir, source_file_name,
                                    clang=args.clang,
-                                   clang_append=clang_append)
+                                   clang_append=clang_append,
+                                   default_optim=not args.no_opt_override)
     source = SourceTree(source_dir, source_finder)
     snapshot = Snapshot.create_from_source(source, args.output_dir, "function")
     if args.symbol_list is None:

@@ -15,6 +15,8 @@ class SingleLlvmFinder(LlvmSourceFinder):
     def __init__(self, source_dir, llvm_file_name):
         LlvmSourceFinder.__init__(self, source_dir)
         self.llvm_file_name = llvm_file_name
+        self.llvm_file_path = os.path.join(self.source_dir,
+                                           self.llvm_file_name)
 
     def str(self):
         return "single_llvm_file"
@@ -29,7 +31,7 @@ class SingleLlvmFinder(LlvmSourceFinder):
         pass
 
     def find_llvm_with_symbol_def(self, symbol):
-        return os.path.join(self.source_dir, self.llvm_file_name)
+        return self.llvm_file_path
 
     def find_llvm_with_symbol_use(self, symbol):
-        return os.path.join(self.source_dir, self.llvm_file_name)
+        return self.llvm_file_path

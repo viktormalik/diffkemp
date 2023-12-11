@@ -9,6 +9,7 @@ Python library functions are redefined here to be RPython-compatible.
 """
 # TODO: Decompose simultaneous compiling and linking to get individual .ll
 #       files out of it; support other GCC languages than C (Fortran, C++)
+from diffkemp.llvm_ir.compiler import get_clang_default_options
 import os
 import shutil
 import sys
@@ -22,6 +23,7 @@ wrapper_env_vars = {
     "debug": "DIFFKEMP_WRAPPER_DEBUG",
     "llvm_link": "DIFFKEMP_WRAPPER_LLVM_LINK",
     "llvm_dis": "DIFFKEMP_WRAPPER_LLVM_DIS",
+    "no_opt_override": "DIFFKEMP_WRAPPER_NO_OPT_OVERRIDE",
 }
 
 
@@ -96,6 +98,10 @@ def wrapper(argv):
     drop = os.environ.get(wrapper_env_vars["clang_drop"])
     debug = os.environ.get(wrapper_env_vars["debug"])
     llvm_link = os.environ.get(wrapper_env_vars["llvm_link"])
+    if os.environ.get(wrapper_env_vars["no_opt_override"]) == "1":
+        no_opt_override = True
+    else:
+        no_opt_override = False
 
     if (db_filename is None or clang is None or append is None or
             drop is None or argv is None or llvm_link is None):
@@ -171,9 +177,15 @@ def wrapper(argv):
     # Analyze and modify parameters for clang (phase 2)
     clang_argv[0] = clang
     if clang != llvm_link:
+        # Note: extending with the default options must be after
+        # adding the original arguments and before
+        # extending with the append (clang_append) option
+        # so the optimizations flags can be redefined
+        # (it looks like clang uses last specified optimization flag).
+        clang_argv.extend(get_clang_default_options(
+            default_optim=not no_opt_override))
         clang_argv.extend(append)
         # TODO: allow compiling into binary IR
-        clang_argv.extend(["-S", "-emit-llvm", "-g"])
     else:
         # Keep only arguments with input files (and llvm-link itself)
         clang_argv = [arg for arg in clang_argv if arg == clang or
