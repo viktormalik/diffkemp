@@ -1,7 +1,7 @@
 {
   description = "Static analyser of semantic differences in large C projects";
 
-  inputs = { nixpkgs.url = "github:NixOS/nixpkgs/release-23.05"; };
+  inputs = { nixpkgs.url = "github:NixOS/nixpkgs/release-23.11"; };
 
   outputs = { self, nixpkgs, ... }:
     let
@@ -9,7 +9,7 @@
       pkgs = import nixpkgs { inherit system; };
 
       llvmVersionMin = 9;
-      llvmVersionMax = 16;
+      llvmVersionMax = 17;
       llvmVersions = pkgs.lib.lists.range llvmVersionMin llvmVersionMax;
 
       mkDiffkemp =
