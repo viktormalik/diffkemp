@@ -40,6 +40,7 @@ RUN apt-get update && \
       libgmp-dev \
       libssl-dev \
       libz3-dev \
+      libgtest-dev \
       flex \
       gcc-7 \
       g++-7 \
@@ -67,6 +68,7 @@ RUN apt-get update && \
       python3.8-dev \
       python3.8-distutils \
       python3-setuptools \
+      python-is-python3 \
       rpm2cpio \
       vim \
       xz-utils \

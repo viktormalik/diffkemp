@@ -34,7 +34,7 @@ exec_program(llvm-config ARGS --libs irreader passes support OUTPUT_VARIABLE llv
 exec_program(llvm-config ARGS --system-libs OUTPUT_VARIABLE system_libs)
 string(STRIP ${system_libs} system_libs)
 
-target_link_libraries(runTests gtest simpll-lib ${llvm_libs})
+target_link_libraries(runTests gtest -lpthread simpll-lib ${llvm_libs})
 if (NOT ${system_libs} STREQUAL "")
 	target_link_libraries(runTests gtest ${system_libs})
 endif()
