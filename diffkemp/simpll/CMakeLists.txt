@@ -31,7 +31,17 @@ exec_program(llvm-config ARGS --libs irreader passes support OUTPUT_VARIABLE llv
 exec_program(llvm-config ARGS --system-libs OUTPUT_VARIABLE system_libs)
 string(STRIP ${system_libs} system_libs)
 
+# Try to find system-wide Z3 (e.g. local build)
+find_package(Z3 CONFIG)
+if (NOT ${Z3_FOUND})
+    # Use our FindZ3.cmake (e.g. nix build)
+    find_package(Z3 REQUIRED MODULE)
+endif()
+
 add_library(simpll-lib ${srcs} ${passes} ${library})
+target_include_directories(simpll-lib PRIVATE ${Z3_CXX_INCLUDE_DIRS})
+target_link_libraries(simpll-lib PRIVATE ${Z3_LIBRARIES})
+target_compile_options(simpll-lib PRIVATE ${Z3_COMPONENT_CXX_FLAGS})
 add_executable(simpll SimpLL.cpp)
 set_target_properties(simpll PROPERTIES PREFIX "diffkemp-")
 target_link_libraries(simpll simpll-lib ${llvm_libs})

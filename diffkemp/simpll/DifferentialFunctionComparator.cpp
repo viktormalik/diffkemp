@@ -1133,7 +1133,11 @@ int DifferentialFunctionComparator::cmpBasicBlocksFromInstructions(
             }
 
             if (Res && config.UseSMT && !suppressRelocationsAndSMT)
-                Res = SMTComparator->compare(InstL, InstR);
+                try {
+                    Res = SMTComparator->compare(InstL, InstR);
+                } catch (const SMTException &err) {
+                    LOG(err.what());
+                }
 
             if (Res)
                 return Res;
