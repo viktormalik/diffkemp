@@ -428,6 +428,87 @@ void SMTBlockComparator::encodeInstruction(z3::solver &s,
     }
 }
 
+bool SMTBlockComparator::isOutputVar(BasicBlock::const_iterator Inst,
+                                     BasicBlock::const_iterator End) {
+    // A variable is output if it's used outside the given snippet
+    // It can be either used in another basic block or in the same basic block
+    // but after the end of the snippet.
+    return std::any_of(
+            Inst->users().begin(), Inst->users().end(), [&End](const User *u) {
+                auto I = dyn_cast<Instruction>(u);
+                if (I->getParent() == End->getParent()) {
+#if LLVM_VERSION_MAJOR < 11
+                    OrderedBasicBlock OBB(I->getParent());
+                    return OBB.dominates(&*End, I) || &*End == I;
+#else
+                    return End->comesBefore(I) || &*End == I;
+#endif
+                } else {
+                    return true;
+                }
+            });
+}
+
+std::set<const Value *>
+        SMTBlockComparator::collectOutputVars(BasicBlock::const_iterator Start,
+                                              BasicBlock::const_iterator End) {
+    std::set<const Value *> result;
+    while (Start != End) {
+        if (isOutputVar(Start, End)) {
+            result.emplace(&*Start);
+        }
+        Start++;
+    }
+    return result;
+}
+
+z3::expr SMTBlockComparator::constructPostCondition(
+        z3::context &c,
+        BasicBlock::const_iterator StartL,
+        BasicBlock::const_iterator EndL,
+        BasicBlock::const_iterator StartR,
+        BasicBlock::const_iterator EndR) {
+    auto outL = collectOutputVars(StartL, EndL);
+    auto outR = collectOutputVars(StartR, EndR);
+
+    z3::expr postcond = c.bool_val(true);
+    // When searching synchronization in findSnippetEnd, the mapping of output
+    // variables in the remainder of the current basic block has already been
+    // determined and is filled in mappedValuesBySn.
+    while (StartL != EndL) {
+        if (isOutputVar(StartL, EndL)) {
+            auto snIt = fComp->sn_mapL.find(&*StartL);
+            if (snIt == fComp->sn_mapL.end()) {
+                StartL++;
+                continue;
+            }
+            if (fComp->mappedValuesBySn.find(snIt->second)
+                != fComp->mappedValuesBySn.end()) {
+                auto values = fComp->mappedValuesBySn[snIt->second];
+                outL.erase(values.first);
+                outR.erase(values.second);
+                auto left = createExprFromValue(c, LPrefix, values.first);
+                auto right = createExprFromValue(c, RPrefix, values.second);
+                postcond = postcond && (left == right);
+            }
+        }
+        StartL++;
+    }
+
+    // However, findSnippetEnd does not touch other basic blocks where some
+    // instructions can use the result of the snippet, typically PHI nodes.
+    // We can only determine the exact mapping if it's 1:1 in this case.
+    if (outL.size() == 1 && outR.size() == 1) {
+        auto left = createExprFromValue(c, LPrefix, *outL.begin());
+        auto right = createExprFromValue(c, LPrefix, *outR.begin());
+        postcond = postcond && (left == right);
+    } else if (!outL.empty() || !outR.empty()) {
+        throw IndistinguishableOutputVarsException();
+    }
+
+    return !postcond;
+}
+
 int SMTBlockComparator::compareSnippets(BasicBlock::const_iterator &StartL,
                                         BasicBlock::const_iterator &EndL,
                                         BasicBlock::const_iterator &StartR,
@@ -466,6 +547,8 @@ int SMTBlockComparator::compareSnippets(BasicBlock::const_iterator &StartL,
         encodeInstruction(s, c, RPrefix, InstR);
         InstR++;
     }
+
+    s.add(constructPostCondition(c, StartL, EndL, StartR, EndR));
 
     std::time_t start = std::time(nullptr);
     switch (s.check()) {
