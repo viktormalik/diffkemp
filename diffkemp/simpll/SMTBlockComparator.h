@@ -82,6 +82,7 @@ class SMTBlockComparator {
     DenseMap<const Value *, int> sn_mapR_backup;
     std::unordered_map<int, std::pair<const Value *, const Value *>>
             mappedValuesBySnBackup;
+    std::vector<const Value *> inverted;
     inline static const std::string LPrefix = "l_var_";
     inline static const std::string RPrefix = "r_var_";
 
@@ -95,10 +96,14 @@ class SMTBlockComparator {
                         BasicBlock::const_iterator &InstR);
 
     /// Compare semantics of snippets <StartL, EndL> and <StartR, EndR>.
+    /// Setting invertCond to true results in CMP instructions whose results
+    /// is used in a branch instruction being inverted on one of the sides
+    /// in order to possibly detect a more complex inverse-condition pattern.
     int compareSnippets(BasicBlock::const_iterator &StartL,
                         BasicBlock::const_iterator &EndL,
                         BasicBlock::const_iterator &StartR,
-                        BasicBlock::const_iterator &EndR);
+                        BasicBlock::const_iterator &EndR,
+                        bool invertCond);
 
     /// Performs the comparison of blocks. This is just a convenience function
     /// to perform cleanup nicely in one place.
@@ -153,13 +158,15 @@ class SMTBlockComparator {
     void encodeInstruction(z3::solver &s,
                            z3::context &c,
                            const std::string &prefix,
-                           BasicBlock::const_iterator Inst);
+                           BasicBlock::const_iterator Inst,
+                           bool invertCond);
 
-    /// Encode CMP instruction.
+    /// Encode CMP instruction. Invert the predicate if invertCond is true.
     z3::expr encodeCmpInstruction(z3::context &c,
                                   z3::expr &res,
                                   const std::string &prefix,
-                                  const CmpInst *Inst);
+                                  const CmpInst *Inst,
+                                  bool invertCond);
 
     /// Encode a binary operation.
     static z3::expr encodeBinaryOperator(z3::context &c,
@@ -180,6 +187,19 @@ class SMTBlockComparator {
                                        z3::expr &res,
                                        const std::string &prefix,
                                        const CallInst *Inst);
+
+    /// Checks whether the given code snippet has a compare instruction
+    /// that could possibly be reversed for inverse-branch-condition pattern.
+    static bool hasPossiblyInverseCmp(BasicBlock::const_iterator Start,
+                                      BasicBlock::const_iterator End);
+
+    /// Checks whether the given instruction can possibly be inverted as a
+    /// part of the inverse-branch-condition pattern.
+    static bool isInvertibleInst(BasicBlock::const_iterator Inst);
+
+    /// Insert LLVM values of CMP instructions that have been inverted into
+    /// a vector used by inverse-branch-condition pattern.
+    void updateInverseCondList();
 };
 
 #endif // DIFFKEMP_SMTBLOCKCOMPARATOR_H
