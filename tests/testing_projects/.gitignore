@@ -1,0 +1,5 @@
+*.o
+
+# Files created by the build command
+*.ll
+function_list

@@ -120,6 +120,13 @@
             # the function (and all functions it uses) as commands.
             shellHook = ''
               export -f setuptoolsShellHook runHook _eval _callImplicitHook
+
+              # Adding current (diffkemp) directory to PYTHONPATH,
+              # the `diffkemp build` subcommand does not work without it
+              # - `cc_wrapper.py` ends with `ModuleNotFoundError` because
+              # `setuptoolsShellHook` does not make diffkemp package
+              # importable for subprocesses called from python.
+              export PYTHONPATH="$(pwd):$PYTHONPATH"
             '';
           };
     in

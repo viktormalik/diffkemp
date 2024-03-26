@@ -47,6 +47,9 @@ def make_argument_parser():
     build_ap.add_argument("--no-native-cc-wrapper",
                           help="do not use a native compiler wrapper even if\
                           present", action="store_true")
+    build_ap.add_argument("--no-opt-override",
+                          help="use default project optimization level",
+                          action="store_true")
     build_ap.set_defaults(func=diffkemp.diffkemp.build)
 
     # "build-kernel" sub-command

@@ -136,6 +136,19 @@ jobs:
           "setuptoolsShellHook &&
            pytest tests -v"
 
+  cc-wrapper-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Pip3 backup
+        run: python3 -m pip install pip -U
+      - name: RPython installation
+        run: |
+          sudo apt install python2 python-pip
+          python2 -m pip install rpython
+      - name: Build cc-wrapper to binary
+        run: python2 -m rpython ${{ github.workspace }}/diffkemp/building/cc_wrapper.py
+
   code-style:
     runs-on: ubuntu-latest
     steps:
