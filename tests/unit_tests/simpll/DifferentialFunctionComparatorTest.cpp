@@ -2450,3 +2450,341 @@ TEST_F(DifferentialFunctionComparatorTest, ReorganizedLocalVariables) {
 
     ASSERT_EQ(DiffComp->compare(), 0);
 }
+
+class DifferentialFunctionComparatorSMTTest
+        : public DifferentialFunctionComparatorTest {
+  public:
+    DifferentialFunctionComparatorSMTTest()
+            : ::DifferentialFunctionComparatorTest() {
+        Conf.UseSMT = true;
+    }
+};
+
+TEST_F(DifferentialFunctionComparatorSMTTest, SMTDistributive) {
+    // Left program (%1 * (%2 + 3)):
+    // %1 = 1+0
+    // %2 = 2+0
+    // %3 = add %2, 3
+    // %4 = mul %1, %3
+    // ret %4
+
+    // Right program (%1 * %2 + %1 * 3)
+    // %1 = 1+0
+    // %2 = 2+0
+    // %3 = mul %1, %2
+    // %4 = mul %1, 3
+    // %5 = add %3, %4
+    // ret %5
+    BasicBlock *BBL = BasicBlock::Create(CtxL, "", FL);
+    BasicBlock *BBR = BasicBlock::Create(CtxR, "", FR);
+
+    // Operands for the binary operation. We also want to test that the SMT
+    // component correctly maps based on varmap, i.e. we need to create
+    // registers with these constants.
+    Constant *ConstL0 = ConstantInt::get(Type::getInt8Ty(CtxL), 0);
+    Constant *ConstL1 = ConstantInt::get(Type::getInt8Ty(CtxL), 1);
+    Constant *ConstL2 = ConstantInt::get(Type::getInt8Ty(CtxL), 2);
+    Constant *ConstL3 = ConstantInt::get(Type::getInt8Ty(CtxL), 3);
+    Constant *ConstR0 = ConstantInt::get(Type::getInt8Ty(CtxR), 0);
+    Constant *ConstR1 = ConstantInt::get(Type::getInt8Ty(CtxR), 1);
+    Constant *ConstR2 = ConstantInt::get(Type::getInt8Ty(CtxR), 2);
+    Constant *ConstR3 = ConstantInt::get(Type::getInt8Ty(CtxR), 3);
+
+    auto Left1 = BinaryOperator::Create(
+            BinaryOperator::Add, ConstL1, ConstL0, "", BBL);
+    auto Left2 = BinaryOperator::Create(
+            BinaryOperator::Add, ConstL2, ConstL0, "", BBL);
+    auto Left3 = BinaryOperator::Create(
+            BinaryOperator::Add, Left2, ConstL3, "", BBL);
+    auto Left4 =
+            BinaryOperator::Create(BinaryOperator::Mul, Left1, Left3, "", BBL);
+    auto RetL = ReturnInst::Create(CtxL, Left4, BBL);
+
+    auto Right1 = BinaryOperator::Create(
+            BinaryOperator::Add, ConstR1, ConstR0, "", BBR);
+    auto Right2 = BinaryOperator::Create(
+            BinaryOperator::Add, ConstR2, ConstR0, "", BBR);
+    auto Right3 = BinaryOperator::Create(
+            BinaryOperator::Mul, Right1, Right2, "", BBR);
+    auto Right4 = BinaryOperator::Create(
+            BinaryOperator::Mul, Right1, ConstR3, "", BBR);
+    auto Right5 = BinaryOperator::Create(
+            BinaryOperator::Add, Right3, Right4, "", BBR);
+    auto RetR = ReturnInst::Create(CtxR, Right5, BBR);
+
+    ASSERT_EQ(DiffComp->compare(), 0);
+}
+
+TEST_F(DifferentialFunctionComparatorSMTTest, SMTMulReplace) {
+    // Left program (5 * %1):
+    // %1 = 2 + 0
+    // %2 = mul %1, 5
+    // ret %2
+
+    // Right program ((%1 << 2) + %1):
+    // %1 = 2 + 0
+    // %2 = shl %1, 2
+    // %3 = add %2, %1
+    // ret %3
+    BasicBlock *BBL = BasicBlock::Create(CtxL, "", FL);
+    BasicBlock *BBR = BasicBlock::Create(CtxR, "", FR);
+
+    Constant *ConstL0 = ConstantInt::get(Type::getInt8Ty(CtxL), 0);
+    Constant *ConstL2 = ConstantInt::get(Type::getInt8Ty(CtxL), 2);
+    Constant *ConstL5 = ConstantInt::get(Type::getInt8Ty(CtxL), 5);
+    Constant *ConstR0 = ConstantInt::get(Type::getInt8Ty(CtxR), 0);
+    Constant *ConstR2 = ConstantInt::get(Type::getInt8Ty(CtxR), 2);
+
+    auto Left1 = BinaryOperator::Create(
+            BinaryOperator::Add, ConstL2, ConstL0, "", BBL);
+    auto Left2 = BinaryOperator::Create(
+            BinaryOperator::Mul, Left1, ConstL5, "", BBL);
+    auto RetL = ReturnInst::Create(CtxL, Left2, BBL);
+
+    auto Right1 = BinaryOperator::Create(
+            BinaryOperator::Add, ConstR2, ConstR0, "", BBR);
+    auto Right2 = BinaryOperator::Create(
+            BinaryOperator::Shl, Right1, ConstR2, "", BBR);
+    auto Right3 = BinaryOperator::Create(
+            BinaryOperator::Add, Right2, Right1, "", BBR);
+    auto RetR = ReturnInst::Create(CtxR, Right3, BBR);
+
+    ASSERT_EQ(DiffComp->compare(), 0);
+}
+
+TEST_F(DifferentialFunctionComparatorSMTTest, SMTMulReplaceOverflow) {
+    // Use nsw (as if the values were signed integers in a C program).
+    // The instructions can produce a poison value, i.e. undefined behavior
+
+    // Left program (5 * %1):
+    // %1 = 2 + 0
+    // %2 = mul nsw %1, 5
+    // ret %2
+
+    // Right program ((%1 << 2) + %1):
+    // %1 = 2 + 0
+    // %2 = shl nsw %1, 2
+    // %3 = add nsw %2, %1
+    // ret %3
+    BasicBlock *BBL = BasicBlock::Create(CtxL, "", FL);
+    BasicBlock *BBR = BasicBlock::Create(CtxR, "", FR);
+
+    Constant *ConstL0 = ConstantInt::get(Type::getInt8Ty(CtxL), 0);
+    Constant *ConstL2 = ConstantInt::get(Type::getInt8Ty(CtxL), 2);
+    Constant *ConstL5 = ConstantInt::get(Type::getInt8Ty(CtxL), 5);
+    Constant *ConstR0 = ConstantInt::get(Type::getInt8Ty(CtxR), 0);
+    Constant *ConstR2 = ConstantInt::get(Type::getInt8Ty(CtxR), 2);
+
+    auto Left1 = BinaryOperator::Create(
+            BinaryOperator::Add, ConstL2, ConstL0, "", BBL);
+    auto Left2 = BinaryOperator::CreateNSW(
+            BinaryOperator::Mul, Left1, ConstL5, "", BBL);
+    auto RetL = ReturnInst::Create(CtxL, Left2, BBL);
+
+    auto Right1 = BinaryOperator::Create(
+            BinaryOperator::Add, ConstR2, ConstR0, "", BBR);
+    auto Right2 = BinaryOperator::CreateNSW(
+            BinaryOperator::Shl, Right1, ConstR2, "", BBR);
+    auto Right3 = BinaryOperator::CreateNSW(
+            BinaryOperator::Add, Right2, Right1, "", BBR);
+    auto RetR = ReturnInst::Create(CtxR, Right3, BBR);
+
+    ASSERT_NE(DiffComp->compare(), 0);
+}
+
+TEST_F(DifferentialFunctionComparatorSMTTest, SMTReorderSimple) {
+    // The same test as ReorderedBinaryOperationSimple but using SMT solver
+    Conf.Patterns.ReorderedBinOps = false;
+
+    BasicBlock *BBL = BasicBlock::Create(CtxL, "", FL);
+    BasicBlock *BBR = BasicBlock::Create(CtxR, "", FR);
+
+    // Operands for the binary operation
+    Constant *ConstL1 = ConstantInt::get(Type::getInt8Ty(CtxL), 0);
+    Constant *ConstL2 = ConstantInt::get(Type::getInt8Ty(CtxL), 1);
+    Constant *ConstR1 = ConstantInt::get(Type::getInt8Ty(CtxR), 0);
+    Constant *ConstR2 = ConstantInt::get(Type::getInt8Ty(CtxR), 1);
+
+    // Commutative binary operations with reversed operands
+    auto ResL = BinaryOperator::Create(
+            BinaryOperator::Add, ConstL1, ConstL2, "", BBL);
+    auto ResR = BinaryOperator::Create(
+            BinaryOperator::Add, ConstR2, ConstR1, "", BBR);
+
+    // Return the result of the operation
+    auto RetL = ReturnInst::Create(CtxL, ResL, BBL);
+    auto RetR = ReturnInst::Create(CtxR, ResR, BBR);
+
+    ASSERT_EQ(DiffComp->compare(), 0);
+
+    RetL->eraseFromParent();
+    RetR->eraseFromParent();
+    ResL->eraseFromParent();
+    ResR->eraseFromParent();
+
+    // Not a commutative operation
+    ResL = BinaryOperator::Create(
+            BinaryOperator::Sub, ConstL1, ConstL2, "", BBL);
+    ResR = BinaryOperator::Create(
+            BinaryOperator::Sub, ConstR2, ConstR1, "", BBR);
+
+    RetL = ReturnInst::Create(CtxL, ResL, BBL);
+    RetR = ReturnInst::Create(CtxR, ResR, BBR);
+
+    ASSERT_EQ(DiffComp->compare(), 1);
+
+    RetL->eraseFromParent();
+    RetR->eraseFromParent();
+    ResL->eraseFromParent();
+    ResR->eraseFromParent();
+
+    // Different operands
+    ResL = BinaryOperator::Create(
+            BinaryOperator::Add, ConstL1, ConstL1, "", BBL);
+    ResR = BinaryOperator::Create(
+            BinaryOperator::Add, ConstR2, ConstR1, "", BBR);
+
+    RetL = ReturnInst::Create(CtxL, ResL, BBL);
+    RetR = ReturnInst::Create(CtxR, ResR, BBR);
+
+    ASSERT_EQ(DiffComp->compare(), 1);
+}
+
+TEST_F(DifferentialFunctionComparatorSMTTest, SMTReorderedThreeInst) {
+    Conf.Patterns.ReorderedBinOps = false;
+    // Left program:
+    // %1 = add 0, 1
+    // %2 = add 2, 3
+    // %3 = add %1, %2
+    // ret %3
+
+    // Right program:
+    // %1 = add 0, 1
+    // %2 = add %2, 2
+    // %3 = add %2, 3
+    // ret %3
+    BasicBlock *BBL = BasicBlock::Create(CtxL, "", FL);
+    BasicBlock *BBR = BasicBlock::Create(CtxR, "", FR);
+
+    Constant *ConstL0 = ConstantInt::get(Type::getInt8Ty(CtxL), 0);
+    Constant *ConstL1 = ConstantInt::get(Type::getInt8Ty(CtxL), 1);
+    Constant *ConstL2 = ConstantInt::get(Type::getInt8Ty(CtxL), 2);
+    Constant *ConstL3 = ConstantInt::get(Type::getInt8Ty(CtxL), 3);
+    Constant *ConstR0 = ConstantInt::get(Type::getInt8Ty(CtxR), 0);
+    Constant *ConstR1 = ConstantInt::get(Type::getInt8Ty(CtxR), 1);
+    Constant *ConstR2 = ConstantInt::get(Type::getInt8Ty(CtxR), 2);
+    Constant *ConstR3 = ConstantInt::get(Type::getInt8Ty(CtxR), 3);
+
+    auto Left1 = BinaryOperator::Create(
+            BinaryOperator::Add, ConstL0, ConstL1, "", BBL);
+    auto Left2 = BinaryOperator::Create(
+            BinaryOperator::Add, ConstL2, ConstL3, "", BBL);
+    auto Left3 =
+            BinaryOperator::Create(BinaryOperator::Add, Left1, Left2, "", BBL);
+    auto RetL = ReturnInst::Create(CtxL, Left3, BBL);
+
+    auto Right1 = BinaryOperator::Create(
+            BinaryOperator::Add, ConstR0, ConstR1, "", BBR);
+    auto Right2 = BinaryOperator::Create(
+            BinaryOperator::Add, Right1, ConstR2, "", BBR);
+    auto Right3 = BinaryOperator::Create(
+            BinaryOperator::Add, Right2, ConstR3, "", BBR);
+    auto RetR = ReturnInst::Create(CtxR, Right3, BBR);
+
+    ASSERT_EQ(DiffComp->compare(), 0);
+}
+
+TEST_F(DifferentialFunctionComparatorSMTTest, SMTFPSimple) {
+    // Floating point SMT-solving suffers from exponential blow up, keep it
+    // simple -- just do a redundant addition of 0.0
+
+    // Left program:
+    // %1 = fadd 2.0, 0.0
+    // %2 = fadd %1, 0.0
+    // %3 = fadd %2, 2,0
+    // ret %3
+
+    // Right program:
+    // %1 = fadd 2.0, 0.0
+    // %2 = fadd %1, 2.0
+    // ret %2
+
+    BasicBlock *BBL = BasicBlock::Create(CtxL, "", FL);
+    BasicBlock *BBR = BasicBlock::Create(CtxR, "", FR);
+
+    Constant *ConstL0 = ConstantFP::get(Type::getFloatTy(CtxL), 0.0);
+    Constant *ConstL1 = ConstantFP::get(Type::getFloatTy(CtxL), 2.0);
+    Constant *ConstR0 = ConstantFP::get(Type::getFloatTy(CtxR), 0.0);
+    Constant *ConstR1 = ConstantFP::get(Type::getFloatTy(CtxR), 2.0);
+
+    auto Left1 = BinaryOperator::Create(
+            BinaryOperator::FAdd, ConstL0, ConstL1, "", BBL);
+    auto Left2 = BinaryOperator::Create(
+            BinaryOperator::FAdd, Left1, ConstL0, "", BBL);
+    auto Left3 = BinaryOperator::Create(
+            BinaryOperator::FAdd, Left2, ConstL1, "", BBL);
+    auto RetL = ReturnInst::Create(CtxL, Left3, BBL);
+
+    auto Right1 = BinaryOperator::Create(
+            BinaryOperator::FAdd, ConstR0, ConstR1, "", BBR);
+    auto Right2 = BinaryOperator::Create(
+            BinaryOperator::FAdd, Right1, ConstR1, "", BBR);
+    auto RetR = ReturnInst::Create(CtxR, Right2, BBR);
+
+    ASSERT_EQ(DiffComp->compare(), 0);
+}
+
+TEST_F(DifferentialFunctionComparatorSMTTest, SMTInverseCond) {
+    // Main blocks with inverse branches
+    // %1 = add 2, 0
+    // %2 = icmp slt %1, 101
+    // br %2, %T, %F
+    BasicBlock *BBL = BasicBlock::Create(CtxL, "", FL);
+    // %1 = add 2, 0
+    // %2 = icmp sgt %1, 100
+    // br %2, %F, %T
+    BasicBlock *BBR = BasicBlock::Create(CtxR, "", FR);
+
+    // Same in both versions:
+    // %T:
+    //   ret true
+    BasicBlock *BBLT = BasicBlock::Create(CtxL, "", FL);
+    BasicBlock *BBRT = BasicBlock::Create(CtxR, "", FR);
+    // Same in both versions:
+    // %F:
+    //   ret false
+    BasicBlock *BBLF = BasicBlock::Create(CtxL, "", FL);
+    BasicBlock *BBRF = BasicBlock::Create(CtxR, "", FR);
+
+    // Main blocks
+    auto ConstL1 = ConstantInt::get(Type::getInt32Ty(CtxL), 2);
+    auto ConstL2 = ConstantInt::get(Type::getInt32Ty(CtxL), 0);
+    auto AddL = BinaryOperator::Create(
+            BinaryOperator::Add, ConstL1, ConstL2, "", BBL);
+    auto CondL = ICmpInst::Create(llvm::Instruction::ICmp,
+                                  llvm::CmpInst::ICMP_SLT,
+                                  AddL,
+                                  ConstantInt::get(Type::getInt32Ty(CtxL), 101),
+                                  "",
+                                  BBL);
+    auto ConstR1 = ConstantInt::get(Type::getInt32Ty(CtxR), 2);
+    auto ConstR2 = ConstantInt::get(Type::getInt32Ty(CtxR), 2);
+    auto AddR = BinaryOperator::Create(
+            BinaryOperator::Add, ConstR1, ConstR2, "", BBR);
+    auto CondR = ICmpInst::Create(llvm::Instruction::ICmp,
+                                  llvm::CmpInst::ICMP_SGT,
+                                  AddR,
+                                  ConstantInt::get(Type::getInt32Ty(CtxL), 100),
+                                  "",
+                                  BBR);
+    BranchInst::Create(BBLT, BBLF, CondL, BBL);
+    BranchInst::Create(BBRF, BBRT, CondR, BBR);
+
+    // True/false blocks
+    ReturnInst::Create(CtxL, ConstantInt::getTrue(CtxL), BBLT);
+    ReturnInst::Create(CtxL, ConstantInt::getFalse(CtxL), BBLF);
+    ReturnInst::Create(CtxR, ConstantInt::getTrue(CtxR), BBRT);
+    ReturnInst::Create(CtxR, ConstantInt::getFalse(CtxR), BBRF);
+
+    ASSERT_EQ(DiffComp->compare(), 0);
+}

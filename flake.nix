@@ -35,6 +35,7 @@
               diffutils
               gtest
               gnumake
+              z3
             ];
 
             propagatedBuildInputs = with python3Packages; [

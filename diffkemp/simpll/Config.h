@@ -68,6 +68,10 @@ class Config {
     std::string CacheDir;
     // Path to custom LLVM IR differential pattern configuration.
     std::string CustomPatternConfigPath;
+    // Use SMT-based checking for short snippets.
+    bool UseSMT;
+    // Timeout for SMT
+    unsigned SMTTimeout;
 
     // The following structure specifies which built-in patterns
     // should be treated as semantically equal.
@@ -91,6 +95,8 @@ class Config {
            std::string CacheDir,
            std::string CustomPatternConfigPath,
            BuiltinPatterns Patterns,
+           bool UseSMT,
+           unsigned SMTTimeout,
            std::string Variable = "",
            bool OutputLlvmIR = false,
            bool PrintAsmDiffs = true,
@@ -103,15 +109,18 @@ class Config {
            std::string SecondFunName,
            std::string CacheDir,
            std::string CustomPatternConfigPath,
+           bool UseSMT = false,
+           unsigned SMTTimeout = 30,
            bool PrintAsmDiffs = true,
            bool PrintCallStacks = true,
            bool ExtendedStat = false)
             : FirstFunName(FirstFunName), SecondFunName(SecondFunName),
               First(nullptr), Second(nullptr), FirstOutFile("/dev/null"),
               SecondOutFile("/dev/null"), CacheDir(CacheDir),
-              CustomPatternConfigPath(CustomPatternConfigPath),
-              OutputLlvmIR(false), PrintAsmDiffs(PrintAsmDiffs),
-              PrintCallStacks(PrintCallStacks), ExtendedStat(ExtendedStat) {}
+              CustomPatternConfigPath(CustomPatternConfigPath), UseSMT(UseSMT),
+              SMTTimeout(SMTTimeout), OutputLlvmIR(false),
+              PrintAsmDiffs(PrintAsmDiffs), PrintCallStacks(PrintCallStacks),
+              ExtendedStat(ExtendedStat) {}
 
     /// Sets debug types specified in the vector.
     void setDebugTypes(std::vector<std::string> &debugTypes);

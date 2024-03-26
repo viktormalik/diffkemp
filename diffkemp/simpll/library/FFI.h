@@ -42,6 +42,8 @@ struct config {
     const char *CacheDir;
     const char *CustomPatterns;
     struct builtin_patterns BuiltinPatterns;
+    int UseSMT;
+    int SMTTimeout;
     const char *Variable;
     int OutputLlvmIR;
     int PrintAsmDiffs;

@@ -58,6 +58,13 @@ cl::opt<std::string> CustomPatternConfigOpt(
         cl::value_desc("custom-pattern-config"),
         cl::desc("Configuration file for custom LLVM IR difference patterns."),
         cl::cat(SimpLLCategory));
+cl::opt<bool> UseSMTOpt("use-smt",
+                        cl::desc("Use SMT-based checking of code snippets."),
+                        cl::cat(SimpLLCategory));
+cl::opt<unsigned> SMTTimeoutOpt("smt-timeout",
+                                cl::desc("Set timeout for --use-smt option. "
+                                         "Set to 0 to prevent timing out."),
+                                cl::cat(SimpLLCategory));
 cl::opt<bool> PrintCallstacksOpt(
         "print-callstacks",
         cl::desc("Print call stacks for non-equal functions."),
@@ -187,6 +194,8 @@ int main(int argc, const char **argv) {
                   CacheDirOpt,
                   CustomPatternConfigOpt,
                   Patterns,
+                  UseSMTOpt,
+                  SMTTimeoutOpt,
                   VariableOpt,
                   OutputLlvmIROpt,
                   PrintAsmDiffsOpt,

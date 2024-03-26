@@ -1,5 +1,14 @@
+import argparse
 from argparse import ArgumentParser, SUPPRESS
 import diffkemp.diffkemp
+
+
+def not_negative(value):
+    int_value = int(value)
+    if int_value < 0:
+        raise argparse.ArgumentTypeError(
+            f"{value} is an invalid non-negative number")
+    return int_value
 
 
 def make_argument_parser():
@@ -116,6 +125,14 @@ def make_argument_parser():
                             help="compare only selected function")
     compare_ap.add_argument("--custom-patterns", "-p",
                             help="custom pattern file or configuration")
+    compare_ap.add_argument("--use-smt",
+                            help="Use SMT-based checking of short snippets",
+                            action="store_true")
+    compare_ap.add_argument("--smt-timeout",
+                            help="Set timeout for SMT checking. Set to 0 for \
+                            no timeout.",
+                            type=not_negative,
+                            default=30)
     compare_ap.add_argument("--output-llvm-ir",
                             help="output each simplified module to a file",
                             action="store_true")

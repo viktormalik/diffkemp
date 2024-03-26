@@ -51,7 +51,13 @@ def run_simpll(first, second, fun_first, fun_second, var, config, suffix=None,
         use_cached_modules = (module_cache and first in module_cache and
                               second in module_cache)
 
-        output = ffi.new("char [1000000]")
+        # FIXME: Finding synchronization point when using SMT solving can lead
+        #   to analysis of more functions, i.e. the call graph on the output
+        #   can get quite large. Remove this workaround once we figure out
+        #   a way how to reduce the size (e.g. do not recurse into function
+        #   calls when looking for synchronization).
+        out_size = 1_000_000 if not config.use_smt else 10_000_000
+        output = ffi.new(f"char [{out_size}]")
         cache_dir = ffi.new("char []", cache_dir.encode("ascii") if cache_dir
                             else b"")
         custom_patterns = ffi.new(
@@ -65,6 +71,8 @@ def run_simpll(first, second, fun_first, fun_second, var, config, suffix=None,
         conf_struct.CacheDir = cache_dir
         conf_struct.CustomPatterns = custom_patterns
         conf_struct.BuiltinPatterns = builtin_patterns[0]
+        conf_struct.UseSMT = config.use_smt
+        conf_struct.SMTTimeout = config.smt_timeout
         conf_struct.OutputLlvmIR = config.output_llvm_ir
         conf_struct.PrintAsmDiffs = config.print_asm_diffs
         conf_struct.ExtendedStat = config.extended_stat
@@ -149,6 +157,11 @@ def run_simpll(first, second, fun_first, fun_second, var, config, suffix=None,
             # Builtin pattern configuration
             for pattern, enabled in config.builtin_patterns.settings.items():
                 simpll_command.append(f"--{pattern}={str(enabled)}")
+
+            if config.use_smt:
+                simpll_command.append("--use-smt")
+                simpll_command.extend(["--smt-timeout",
+                                       str(config.smt_timeout)])
 
             if config.output_llvm_ir:
                 simpll_command.append("--output-llvm-ir")

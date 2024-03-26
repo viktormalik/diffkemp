@@ -45,7 +45,7 @@ ffibuilder.set_source(
     libraries=['simpll-lib'],
     extra_compile_args=["-Idiffkemp/simpll"] + llvm_cflags,
     extra_link_args=[simpll_link_arg, "-lstdc++"] + llvm_ldflags +
-    llvm_libs)
+    llvm_libs + ["-lz3"])
 
 if __name__ == "__main__":
     ffibuilder.compile()
