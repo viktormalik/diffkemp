@@ -1,6 +1,7 @@
 // Tests of the Callstack component appearance
 
 import Callstack from '../components/Callstack';
+import { MacroFunctionDifference } from './examples';
 
 // Custom query to find a DOM element in the Callstack
 // which represents the called function with the given name
@@ -316,6 +317,22 @@ specify('a complex call stack should be visualised correctly', () => {
     compFunName={compFunName}
     oldCallStack={oldCallStack}
     newCallStack={newCallStack}
+    definitions={{}}
+    onSelect={() => {}}
+  />);
+  checkCallStackAppearance(expectedVisualisation);
+});
+
+specify('a call stack with macro-function difference should be visualised correctly', () => {
+  const expectedVisualisation = [
+    ['down_write'],
+    ['get_task_struct (macro)', 'get_task_struct'],
+  ];
+
+  cy.mount(<Callstack
+    compFunName={MacroFunctionDifference.results[0].function}
+    oldCallStack={MacroFunctionDifference.results[0].diffs[0]['old-callstack']}
+    newCallStack={MacroFunctionDifference.results[0].diffs[0]['new-callstack']}
     definitions={{}}
     onSelect={() => {}}
   />);

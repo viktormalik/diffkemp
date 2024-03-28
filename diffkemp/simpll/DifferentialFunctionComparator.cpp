@@ -17,6 +17,7 @@
 #include "DebugInfo.h"
 #include "FieldAccessUtils.h"
 #include "Logger.h"
+#include "Result.h"
 #include "SourceCodeUtils.h"
 #include "passes/FunctionAbstractionsGenerator.h"
 #include "passes/SimplifyKernelFunctionCallsPass.h"
@@ -418,11 +419,38 @@ void DifferentialFunctionComparator::findMacroFunctionDifference(
             R->getDebugLoc(), 0);
     std::string NameL;
     std::string NameR;
-    if (isa<CallInst>(L))
-        NameL = getCalledFunction(dyn_cast<CallInst>(L))->getName().str();
-    if (isa<CallInst>(R))
-        NameR = getCalledFunction(dyn_cast<CallInst>(R))->getName().str();
-
+    std::unique_ptr<Definition> lastDefL{};
+    std::unique_ptr<Definition> lastDefR{};
+    if (isa<CallInst>(L)) {
+        auto functionL = getCalledFunction(dyn_cast<CallInst>(L));
+        NameL = functionL->getName().str();
+        // Create definition only if description of the subprogram exists
+        // and it is definition (not declaration) of function.
+        if (functionL->getSubprogram()
+            && functionL->getSubprogram()->isDefinition()) {
+            lastDefL = std::move(std::make_unique<Definition>(
+                    NameL,
+                    functionL->getSubprogram()->getLine(),
+                    functionL->getSubprogram()
+                            ->getFile()
+                            ->getFilename()
+                            .str()));
+        }
+    }
+    if (isa<CallInst>(R)) {
+        auto functionR = getCalledFunction(dyn_cast<CallInst>(R));
+        NameR = functionR->getName().str();
+        if (functionR->getSubprogram()
+            && functionR->getSubprogram()->isDefinition()) {
+            lastDefR = std::move(std::make_unique<Definition>(
+                    NameR,
+                    functionR->getSubprogram()->getLine(),
+                    functionR->getSubprogram()
+                            ->getFile()
+                            ->getFilename()
+                            .str()));
+        }
+    }
     // Note: the line has to actually have been found for the comparison to make
     // sense.
     if ((LineL != "") && (LineR != "") && (LineL == LineR)
@@ -434,10 +462,20 @@ void DifferentialFunctionComparator::findMacroFunctionDifference(
         if ((MacrosL.find(NameL) == MacrosL.end()
              && MacrosR.find(NameL) != MacrosR.end())) {
             trueName = NameL;
+            auto macroUseR = &MacrosR.find(trueName)->second;
+            lastDefR = std::move(
+                    std::make_unique<Definition>(macroUseR->def->name,
+                                                 macroUseR->def->line,
+                                                 macroUseR->def->sourceFile));
             NameR = NameL + " (macro)";
             ModComparator->tryInline = {dyn_cast<CallInst>(L), nullptr};
         } else {
             trueName = NameR;
+            auto macroUseL = &MacrosL.find(trueName)->second;
+            lastDefL = std::move(
+                    std::make_unique<Definition>(macroUseL->def->name,
+                                                 macroUseL->def->line,
+                                                 macroUseL->def->sourceFile));
             NameL = NameR + " (macro)";
             ModComparator->tryInline = {nullptr, dyn_cast<CallInst>(R)};
         }
@@ -446,6 +484,10 @@ void DifferentialFunctionComparator::findMacroFunctionDifference(
 
         std::unique_ptr<SyntaxDifference> diff =
                 std::make_unique<SyntaxDifference>();
+        diff->syntaxKind =
+                (NameL == trueName)
+                        ? SyntaxDifference::SyntaxKind::FUNCTION_MACRO
+                        : SyntaxDifference::SyntaxKind::MACRO_FUNCTION;
         diff->function = L->getFunction()->getName().str();
         diff->name = trueName;
         diff->BodyL = "[macro function difference]";
@@ -458,6 +500,8 @@ void DifferentialFunctionComparator::findMacroFunctionDifference(
                 CallInfo{NameR,
                          R->getDebugLoc()->getFile()->getFilename().str(),
                          R->getDebugLoc()->getLine()}};
+        diff->lastDefL = std::move(lastDefL);
+        diff->lastDefR = std::move(lastDefR);
         ModComparator->ComparedFuns.at({FnL, FnR})
                 .addDifferingObject(std::move(diff));
     }
@@ -1219,6 +1263,7 @@ std::vector<std::unique_ptr<SyntaxDifference>>
     // Note: the call stack is left empty here, it will be added in reportOutput
     std::unique_ptr<SyntaxDifference> diff =
             std::make_unique<SyntaxDifference>();
+    diff->syntaxKind = SyntaxDifference::SyntaxKind::ASSEMBLY;
     diff->BodyL = AsmL.str() + " (args: " + argumentNamesL + ")";
     diff->BodyR = AsmR.str() + " (args: " + argumentNamesR + ")";
     diff->StackL = CallStack();

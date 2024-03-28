@@ -12,13 +12,16 @@ import Col from 'react-bootstrap/Col';
 
 import DiffViewWrapper from './DiffViewWrapper';
 
-const SOURCE_DIRECTORY = 'src';
+const OLD_SRC_DIR = 'old-src';
+const NEW_SRC_DIR = 'new-src';
 const DIFF_DIRECTORY = 'diffs';
 
 /**
  * Code/function preparation and visualisation.
  * @param {Object} props
  * @param {Object} props.specification - Specification of code to be shown.
+ *   If only one version (old/new) of function is supposed to be shown then the fields
+ *   for the other version should be null.
  * @param {string} props.specification.oldSrc - Path to the source file in which
  *                                              is located old version of function.
  * @param {string} props.specification.newSrc - Path to source file of the
@@ -41,6 +44,7 @@ export default function Code({
   specification, oldFolder, newFolder, getFile,
 }) {
   const [oldCode, setOldCode] = useState(null);
+  const [newCode, setNewCode] = useState(null);
   const [diff, setDiff] = useState(null);
   // Getting content of source and diff file.
   useEffect(() => {
@@ -49,10 +53,17 @@ export default function Code({
 
     const getOldCode = async () => {
       const oldCodeFile = await getFile(
-        path.join(SOURCE_DIRECTORY, specification.oldSrc),
+        path.join(OLD_SRC_DIR, specification.oldSrc),
       );
       if (ignoreFetchedFiles) return;
       setOldCode(oldCodeFile);
+    };
+    const getNewCode = async () => {
+      const newCodeFile = await getFile(
+        path.join(NEW_SRC_DIR, specification.newSrc),
+      );
+      if (ignoreFetchedFiles) return;
+      setNewCode(newCodeFile);
     };
     const getDiff = async () => {
       const diffFile = await getFile(
@@ -63,7 +74,11 @@ export default function Code({
     };
 
     if (specification) {
-      getOldCode();
+      if (specification.oldSrc) getOldCode();
+      else setOldCode('');
+      if (specification.newSrc) getNewCode();
+      else setNewCode('');
+
       if (specification.diff) {
         getDiff();
       } else {
@@ -74,16 +89,15 @@ export default function Code({
       ignoreFetchedFiles = true;
     };
   }, [specification, getFile]);
-
-  if (oldCode === null || diff == null) {
+  if (oldCode === null || newCode === null || diff == null) {
     return null;
   }
   return (
     <div>
       {/* showing info about location of file */}
       <Row className="py-2 border border-primary rounded-top text-bg-primary">
-        <Col>{path.join(oldFolder, specification.oldSrc)}</Col>
-        <Col>{path.join(newFolder, specification.newSrc)}</Col>
+        <Col>{specification.oldSrc && path.join(oldFolder, specification.oldSrc)}</Col>
+        <Col>{specification.newSrc && path.join(newFolder, specification.newSrc)}</Col>
       </Row>
       {/* showing code of function */}
       <Row className="border border-primary rounded-bottom p-1">
@@ -98,10 +112,12 @@ export default function Code({
         >
           <DiffViewWrapper
             oldCode={oldCode}
+            newCode={newCode}
             diff={diff}
             oldStart={specification.oldStart}
             newStart={specification.newStart}
             oldEnd={specification.oldEnd}
+            newEnd={specification.newEnd}
             showDiff={specification.calling === undefined}
             linesToShow={specification.calling === undefined
               ? null
@@ -115,13 +131,15 @@ export default function Code({
 
 Code.propTypes = {
   specification: PropTypes.shape({
-    oldSrc: PropTypes.string.isRequired,
-    newSrc: PropTypes.string.isRequired,
+    oldSrc: PropTypes.string,
+    newSrc: PropTypes.string,
     diff: PropTypes.string,
-    oldStart: PropTypes.number.isRequired,
-    newStart: PropTypes.number.isRequired,
-    oldEnd: PropTypes.number.isRequired,
+    oldStart: PropTypes.number,
+    newStart: PropTypes.number,
+    oldEnd: PropTypes.number,
+    newEnd: PropTypes.number,
     calling: PropTypes.arrayOf(PropTypes.number),
+    type: PropTypes.string.isRequired,
   }).isRequired,
   oldFolder: PropTypes.string.isRequired,
   newFolder: PropTypes.string.isRequired,

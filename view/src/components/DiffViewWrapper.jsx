@@ -55,17 +55,73 @@ function createFileStructure(oldCode, oldStart, newStart) {
  * @returns Returns array of lines to be highlighted acceptable by Diff.
  */
 function getLinesToHighlight(linesToShow, hunks) {
-  if (linesToShow) {
+  const changesToHighlight = [];
+  // Do not highlight when linesToShow[] is set to -1.
+  if (!linesToShow) return [];
+  if (linesToShow[0] !== -1) {
     const oldChange = findChangeByOldLineNumber(hunks, linesToShow[0]);
-    const newChange = findChangeByNewLineNumber(hunks, linesToShow[1]);
-    if (oldChange && newChange) {
+    if (oldChange) {
       const oldChangeKey = getChangeKey(oldChange);
-      const newChangeKey = getChangeKey(newChange);
-      if (oldChangeKey === newChangeKey) return [oldChangeKey];
-      return [oldChangeKey, newChangeKey];
+      changesToHighlight.push(oldChangeKey);
     }
   }
-  return [];
+  if (linesToShow[1] !== -1) {
+    const newChange = findChangeByNewLineNumber(hunks, linesToShow[1]);
+    if (newChange) {
+      const newChangeKey = getChangeKey(newChange);
+      changesToHighlight.push(newChangeKey);
+    }
+  }
+  return changesToHighlight;
+}
+
+/**
+ * Creates a file structure for code visualisation of one version of a function.
+ * @param {bool} isOld - True if the version is old version of the function, otherwise false.
+ * @param {string} code - Code of a file in which is the function located.
+ * @param {Number} start - Line on which the code of the function starts.
+ * @param {Number} end - Line on which the code of the function ends.
+ * @returns Returns file structure containing code of the function.
+ */
+function createFileStructForOneSide(isOld, code, start, end) {
+  // The structure which react-diff-view uses
+  // is described here https://github.com/ecomfe/gitdiff-parser#api
+  // (gitdiff-parser is a package which react-diff-view uses).
+  let lines = code.split('\n');
+  lines = lines.slice(start - 1, end);
+  const changes = lines.reduce((result, line, index) => {
+    const change = {
+      content: line,
+      type: isOld ? 'delete' : 'insert',
+      lineNumber: start + index,
+    };
+    if (isOld) {
+      change.isDelete = true;
+    } else {
+      change.isInsert = true;
+    }
+    result.push(change);
+    return result;
+  }, []);
+  const hunk = {
+    oldStart: isOld ? start : 0,
+    oldLines: isOld ? end - start + 1 : 0,
+    newStart: isOld ? 0 : start,
+    newLines: isOld ? 0 : end - start + 1,
+    changes,
+  };
+  hunk.content = `@@ -${hunk.oldStart},${hunk.oldLines} +${hunk.newStart},${hunk.newLines} @@`;
+  // Note: Missing fields: oldMode, newMode, similarity, oldRevision, newRevision,
+  // Note 2: `type` must be 'modify' so the code is shown on the correct side.
+  const file = {
+    hunks: [hunk],
+    oldEndingNewLine: true,
+    newEndingNewLine: true,
+    oldPath: '',
+    newPath: '',
+    type: 'modify',
+  };
+  return file;
 }
 
 function getSyntaxHighlightedTokens(hunks) {
@@ -89,37 +145,60 @@ function getSyntaxHighlightedTokens(hunks) {
  *   amount (LINES_OF_CONTEXT) of lines is shown.
  *
  * For the lines which are not shown, we render buttons that allow user to show these lines.
- * @param {Object} props
+ * @param {Object} props - Note: The old/new props can be null when showing only one version
+ *   of the function.
  * @param {string} props.oldCode - Source code of file containing old version of the function.
+ * @param {string} props.newCode - Source code of file containing new version of the function.
+ *   If oldCode or newCode is empty string, then we are showing only one version of function.
  * @param {string} props.diff - Output of unified diff of old and new source code.
  * @param {number} props.oldStart - Line where the old version of the function starts.
  * @param {number} props.newStart - Line where the new version of the function starts.
  * @param {number} props.oldEnd - Line where the old version of the function ends.
+ * @param {number} props.newEnd - Line where the new version of the function ends.
  * @param {Boolean} [props.showDiff=true] - True to color differences in function.
- * @param {Number} [props.linesToShow=null] - Lines (old, new) of function which
- *                                            should be shown and highlighted.
+ * @param {Number} [props.linesToShow] - Lines (old, new) of function which
+ *   should be shown and highlighted. Can be undefined/null if no line to show.
+ *   Old/new line can be -1 if showing only one version of function.
  */
 export default function DiffViewWrapper({
   oldCode,
+  newCode,
   diff,
   oldStart,
   newStart,
   oldEnd,
+  newEnd,
   showDiff = true,
   linesToShow = null,
 }) {
+  /* Showing code only for one version of a function? */
+  const onlyOneSide = (oldCode === '' || newCode === '');
   /* getting object which Diff component needs */
   const file = useMemo(() => {
-    if (diff !== '') {
-      const [fileObject] = parseDiff(diff);
-      return fileObject;
+    let returnValue;
+    if (onlyOneSide) {
+      const onlyOld = (newCode === '');
+      const code = onlyOld ? oldCode : newCode;
+      const start = onlyOld ? oldStart : newStart;
+      const end = onlyOld ? oldEnd : newEnd;
+      returnValue = createFileStructForOneSide(onlyOld, code, start, end);
+    } else if (diff !== '') {
+      // passing zip option for better look in split view
+      const [fileObject] = parseDiff(diff, { nearbySequences: 'zip' });
+      returnValue = fileObject;
+    } else {
+      returnValue = createFileStructure(oldCode, oldStart, newStart);
     }
-    return createFileStructure(oldCode, oldStart, newStart);
-  }, [diff, oldCode, oldStart, newStart]);
+    return returnValue;
+  }, [diff, oldCode, newCode, oldStart, newStart, oldEnd, newEnd, onlyOneSide]);
     /* hunks of differences/code which will be shown */
   const [hunks, setHunks] = useState(null);
-  // function for adding lines of old code form startLine to endLine
-  // which should be shown
+  // Function for adding lines of old code form startLine to endLine
+  // which should be shown.
+  // TODO - edit to work also if showing only one version of a function.
+  // Currently it does not make sense, because only one version is shown
+  // in case of macro call, for macro calls we do not know on which line
+  // is called next function/macro and we are showing whole body of macro.
   const expandHunks = useCallback(
     (startLine, endLine = startLine) => {
       setHunks((oldHunks) => expandFromRawCode(oldHunks, oldCode, startLine, endLine + 1));
@@ -152,6 +231,8 @@ export default function DiffViewWrapper({
     };
 
     setHunks(file.hunks);
+    // If showing code for onlyOneSide, then right now we are showing the whole function.
+    if (onlyOneSide) return;
     addFirstAndLastLine();
     setHunks((oldHunks) => getHunksInRange(oldHunks));
     // Showing function which is called instead of diff of function
@@ -172,7 +253,7 @@ export default function DiffViewWrapper({
         addAllLinesOfFunction();
       }
     }
-  }, [file, oldCode, oldStart, oldEnd, linesToShow, expandHunks]);
+  }, [file, oldCode, oldStart, oldEnd, linesToShow, expandHunks, onlyOneSide]);
 
   /**
    * Function for rendering/adding expand button on places
@@ -220,11 +301,13 @@ export default function DiffViewWrapper({
 }
 
 DiffViewWrapper.propTypes = {
-  oldCode: PropTypes.string.isRequired,
+  oldCode: PropTypes.string,
+  newCode: PropTypes.string,
   diff: PropTypes.string.isRequired,
-  oldStart: PropTypes.number.isRequired,
-  newStart: PropTypes.number.isRequired,
-  oldEnd: PropTypes.number.isRequired,
+  oldStart: PropTypes.number,
+  newStart: PropTypes.number,
+  oldEnd: PropTypes.number,
+  newEnd: PropTypes.number,
   showDiff: PropTypes.bool,
   linesToShow: PropTypes.arrayOf(PropTypes.number),
 };

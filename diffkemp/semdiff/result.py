@@ -81,6 +81,27 @@ class Result:
                      "line": call["line"]}
                     for call in self.calls]
 
+        @staticmethod
+        def get_name_and_kind(call):
+            """Returns tuple (name, kind) for a call."""
+            name = call["name"]
+            kind = "function"
+            if " " in name:
+                name, kind = name.split(" ")
+                # kind looks like this "(kind)", extracting it from brackets
+                kind = kind[1:-1]
+            return (name, kind)
+
+        def get_parent_call_name(self, index, compared_fun):
+            """Returns name of the parrent call (calling function/macro)-
+            :param index: Index to callstack containing current call.
+            :param compared_fun: Name of compared function.
+            """
+            parent_name = (self.calls[index - 1]["name"]
+                           if index >= 1
+                           else compared_fun)
+            return parent_name
+
         def get_symbol_names(self, compared_fun):
             """
             Returns a tuple containing three sets of symbol names which appear
@@ -89,31 +110,65 @@ class Result:
             - macro names (set of strings)
             - type names (set of string pairs)
                 (type name, name of function in which the type is used)
-
             :param compared_fun: Name of compared function.
             """
             function_names = set()
             macro_names = set()
             type_names = set()
+            if not self.calls:
+                return function_names, macro_names, type_names
+            for index, call in enumerate(self.calls):
+                name, kind = self.get_name_and_kind(call)
+                if kind == "function":
+                    function_names.add(name)
+                elif kind == "macro":
+                    macro_names.add(name)
+                elif kind == "type":
+                    # name of type and name of function in which it is used
+                    parent_name = self.get_parent_call_name(index,
+                                                            compared_fun)
+                    type_names.add((name, parent_name))
+            return function_names, macro_names, type_names
+
+        def get_macro_defs(self, compared_fun):
+            """
+            Returns a tuple:
+            - list of macro definitions (except last macro in the callstack)
+              = list of dicts (`file`, `name`, `line`),
+            - (vertex name, last macro name) for retrieving info
+              about last macro defintion from the ComparisonGraph.
+            In case the call stack does not includes macros, the list
+            with definitions is empty and instead of the (vertex, macro) tuple
+            it contains None.
+            :param compared_fun: Name of compared function.
+            """
+            macro_defs = []
+            # For getting last macro deffinition
+            last_macro_name = None
+            last_function_name = compared_fun
             if self.calls:
                 for index, call in enumerate(self.calls):
-                    # getting symbol name
-                    name = call["name"]
-                    kind = "function"
-                    if " " in name:
-                        name, kind = name.split(" ")
-                    if kind == "function":
-                        function_names.add(name)
-                    elif kind == "(macro)":
-                        macro_names.add(name)
-                    elif kind == "(type)":
-                        # name of type and name of function
-                        # in which it is used
-                        parent_name = (self.calls[index - 1]["name"]
-                                       if index >= 1
-                                       else compared_fun)
-                        type_names.add((name, parent_name))
-            return function_names, macro_names, type_names
+                    name, kind = self.get_name_and_kind(call)
+                    if kind != "macro":
+                        last_function_name = name
+                        continue
+                    # last call in callstack
+                    if index + 1 == len(self.calls):
+                        last_macro_name = name
+                    else:
+                        # The call contains a macro name, a file from which
+                        # the macro was 'called' and a line where starts
+                        # the macro body/def in which the call was called from.
+                        # To get information about a current macro file and
+                        # line, we have to look on a call below.
+                        macro_defs.append({
+                            "name": call["name"],
+                            "file": self.calls[index + 1]["file"],
+                            "line": self.calls[index + 1]["line"]
+                        })
+            last_macro_info = (last_function_name, last_macro_name) \
+                if last_macro_name is not None else None
+            return macro_defs, last_macro_info
 
         def __str__(self):
             """Converts a callstack to a string representation."""

@@ -52,23 +52,25 @@ class EndLineNotFound(Exception):
 
 def get_end_line(filename, start, kind):
     """
-    Get number of line where function / type ends.
+    Get number of line where function/type/macro ends.
     Can raise UnicodeDecodeError, EndLineError.
+    :param kind: One of "type", "function", "macro".
     """
-
-    if kind == "function":
-        terminator_list = ["}", ");"]
-    elif kind == "type":
-        terminator_list = ["};"]
-
+    is_end_map = {
+        "function": lambda line: line in ["}", ");"],
+        "type": lambda line: line in ["};"],
+        "macro": lambda line: line[-1] != "\\"
+    }
+    if kind not in is_end_map:
+        raise ValueError("Error: get_end_line expects kind to be" +
+                         f"one of type/function/macro, received {kind}")
+    is_end = is_end_map[kind]
     with open(filename, "r", encoding='utf-8') as file:
         lines = file.readlines()
 
-        # The end of the function is detected as a line that contains
-        # nothing but an ending curly bracket
         line_number = start
         line = lines[line_number - 1]
-        while line.rstrip() not in terminator_list:
+        while not is_end(line.rstrip()):
             line_number += 1
             if line_number > len(lines):
                 raise EndLineNotFound

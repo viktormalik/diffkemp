@@ -7,6 +7,7 @@ import {
 import '@testing-library/jest-dom';
 
 import Callstack from '../components/Callstack';
+import { MacroFunctionDifference } from './examples';
 
 describe('simple callstack visualisation test', () => {
   const compFunName = '__put_task_struct';
@@ -84,15 +85,12 @@ describe('complex callstack visualisation test', () => {
 });
 
 describe("callstack with 'different' differing functions", () => {
-  const compFunName = 'down_write';
-  const oldCallStack = [{ name: 'get_task_struct (macro)' }];
-  const newCallStack = [{ name: 'get_task_struct' }];
   test('all function names should be visible', () => {
     render(
       <Callstack
-        compFunName={compFunName}
-        oldCallStack={oldCallStack}
-        newCallStack={newCallStack}
+        compFunName={MacroFunctionDifference.results[0].function}
+        oldCallStack={MacroFunctionDifference.results[0].diffs[0]['old-callstack']}
+        newCallStack={MacroFunctionDifference.results[0].diffs[0]['new-callstack']}
         definitions={{}}
         onSelect={() => {}}
       />,

@@ -169,11 +169,11 @@ def test_graph_to_fun_pair_list(graph):
         graph.graph_to_fun_pair_list("main_function", "main_function", False)
     for side in [0, 1]:
         assert {obj[side].name for obj in objects_to_compare} == {
-            "do_check", "MACRO", "struct_file"}
+            "do_check", "___MACRO", "struct_file"}
         do_check = [obj[side] for obj in objects_to_compare
                     if obj[side].name == "do_check"][0]
         macro = [obj[side] for obj in objects_to_compare
-                 if obj[side].name == "MACRO"][0]
+                 if obj[side].name == "___MACRO"][0]
         struct_file = [obj[side] for obj in objects_to_compare
                        if obj[side].name == "struct_file"][0]
         assert do_check.filename == "app/main.c"
@@ -198,8 +198,8 @@ def test_graph_to_fun_pair_list(graph):
         assert not struct_file.covered
     # All results should be not equal.
     assert {obj[2] for obj in objects_to_compare} == {Result.Kind.NOT_EQUAL}
-    assert syndiff_bodies_left == {"MACRO": "5"}
-    assert syndiff_bodies_right == {"MACRO": "5L"}
+    assert syndiff_bodies_left == {"___MACRO": "5"}
+    assert syndiff_bodies_right == {"___MACRO": "5L"}
 
 
 def test_populate_predecessor_lists(graph):

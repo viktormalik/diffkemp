@@ -209,23 +209,48 @@ class ComparisonGraph:
     class SyntaxDiff(NonFunDiff):
         """
         A syntax difference.
-
-        Note: body is a tuple containing the values for both modules.
+        :param kind: The kind of difference: 'macro', 'assembly',
+            'function-macro', 'macro-function', ('unknown').
+        :param name: Name of an 'object' (eg. macro) in the first module in
+            which was found difference. In case of inline assembly difference
+            the name starts with "assembly code " followed by a number.
+        :param parent_fun: Name of vertex in which was the syntax diff found.
+        :param callstack: Tuple (call stack in first module, second one),
+            callstack is dict with keys `file`, `line`, `weak`, `function`.
+            The `function` contains name of called 'object', in case of macro
+            the name contains extension " (macro)".
+            The `line` in this case is line, where the definition starts
+            of the macro from which is called 'object' specified by `function`.
+        :param body: A tuple containing the body of the 'object' for both
+            modules.
+        :param last_def: Tuple (first, second), for macro difference contains
+            information about definition (name, file, line) of the differing
+            macros, otherwise contains None.
         """
-        def __init__(self, name, parent_fun, callstack, body):
+        def __init__(self, kind, name, parent_fun, callstack, body,
+                     last_def=None):
+            self.kind = kind
             self.name = name
             self.parent_fun = parent_fun
             self.callstack = callstack
             self.body = body
+            self.last_def = last_def
 
         @classmethod
         def from_yaml(cls, nonfun_diff):
             """Generates a SyntaxDiff object from YAML returned by SimpLL."""
+            last_def = None
+            if ("last-def-first" in nonfun_diff and
+                    "last-def-second" in nonfun_diff):
+                last_def = (nonfun_diff["last-def-first"],
+                            nonfun_diff["last-def-second"])
             return cls(
+                nonfun_diff["kind"],
                 nonfun_diff["name"],
                 nonfun_diff["function"],
                 (nonfun_diff["stack-first"], nonfun_diff["stack-second"]),
-                (nonfun_diff["body-first"], nonfun_diff["body-second"])
+                (nonfun_diff["body-first"], nonfun_diff["body-second"]),
+                last_def
             )
 
     class TypeDiff(NonFunDiff):

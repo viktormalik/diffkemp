@@ -39,12 +39,13 @@ def graph():
     )
     # Non-function differences
     g["do_check"].nonfun_diffs.append(ComparisonGraph.SyntaxDiff(
-        "MACRO", "do_check",
+        "macro", "___MACRO", "do_check",
         dup([
             {"function": "_MACRO (macro)", "file": "test.c", "line": 1},
             {"function": "__MACRO (macro)", "file": "test.c", "line": 2},
             {"function": "___MACRO (macro)", "file": "test.c", "line": 3},
-        ]), ("5", "5L")
+        ]), ("5", "5L"),
+        dup({"name": "___MACRO", "file": "test.c", "line": 4})
     ))
     g["do_check"].nonfun_diffs.append(ComparisonGraph.TypeDiff(
         "struct_file", "do_check",

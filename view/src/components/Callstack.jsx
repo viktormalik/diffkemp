@@ -5,14 +5,28 @@ import ListGroup from 'react-bootstrap/ListGroup';
 import { PropTypes } from 'prop-types';
 import { CallstackPropTypes, DefinitionsPropTypes } from '../PropTypesValues';
 
+// In which call stack is the call located.
+export const CallType = {
+  Both: 'both',
+  New: 'new',
+  Old: 'old',
+};
+
+const SelectedFunPropType = PropTypes.shape({
+  name: PropTypes.string,
+  type: PropTypes.oneOf(Object.values(CallType)),
+});
+
 /**
  * Component for visualisation of call stack.
  * @param {Object} props
  * @param {string} props.compFunName - First (compared) function name.
- * @param {string} props.selectedFunction - Name of function which is selected
- * and should be highlighted in call stack.
- * @param {Function} props.onSelect - Callback function accepting a function
- * name which was chosen to be shown.
+ * @param {Object} props.selectedFunction - Function which is selected and should
+ *   be highlighted in the call stack.
+ * @param {String} props.selectedFunction.name - Name of the selected function.
+ * @param {String} props.selectedFunction.type - CallType of the selected function.
+ * @param {Function} props.onSelect - Callback function accepting a selected function,
+ *   the callback is called when call (function) is clicked (selected).
  * @returns Returns call stack component.
  */
 export default function Callstack({
@@ -133,7 +147,7 @@ Callstack.propTypes = {
   compFunName: PropTypes.string.isRequired,
   oldCallStack: CallstackPropTypes.isRequired,
   newCallStack: CallstackPropTypes.isRequired,
-  selectedFunction: PropTypes.string,
+  selectedFunction: SelectedFunPropType,
   onSelect: PropTypes.func.isRequired,
   definitions: DefinitionsPropTypes.isRequired,
 };
@@ -143,9 +157,9 @@ Callstack.propTypes = {
  * @param {Object} props
  * @param {string} props.oldName - Name of old call (function).
  * @param {string} props.newName - Name of new call (function).
- * @param {string} props.selectedFunction - Name of selected function.
- * @param {Function} props.onSelect - Callback function which is called
- * when call (function) is clicked (selected).
+ * @param {Object} props.selectedFunction - Function which is selected and should
+ *   be highlighted in the call stack.
+ * @param {Function} props.onSelect - Callback function accepting a selected function.
  * @returns
  */
 function SingleCall({
@@ -160,11 +174,13 @@ function SingleCall({
         name={oldName}
         onSelect={onSelect}
         selectedFunction={selectedFunction}
+        type={CallType.Both}
       />
     );
   }
   return (
     <Calls
+      type={CallType.Both}
       oldCalls={[{ name: oldName }]}
       newCalls={[{ name: newName }]}
       onSelect={onSelect}
@@ -176,7 +192,7 @@ function SingleCall({
 SingleCall.propTypes = {
   oldName: PropTypes.string.isRequired,
   newName: PropTypes.string,
-  selectedFunction: PropTypes.string,
+  selectedFunction: SelectedFunPropType,
   onSelect: PropTypes.func.isRequired,
 };
 
@@ -186,13 +202,13 @@ SingleCall.propTypes = {
  * @param {Object} props
  * @param {Object[]} props.oldCalls - Calls from old call stack.
  * @param {Object[]} props.newCalls - Calls from new call stack.
- * @param {string} props.selectedFunction - Name of selected function.
- * @param {Function} props.onSelect - Callback function which is called
- * when call (function) is clicked (selected).
+ * @param {Object} props.selectedFunction - Function which is selected and should
+ *   be highlighted in the call stack.
+ * @param {Function} props.onSelect - Callback function accepting a selected function.
  * @returns
  */
 function Calls({
-  oldCalls, newCalls, selectedFunction, onSelect,
+  oldCalls, newCalls, selectedFunction, onSelect, type = null,
 }) {
   return (
     <ListGroup horizontal as="ul" className="callstack-call-group">
@@ -204,6 +220,7 @@ function Calls({
             name={call.name}
             onSelect={onSelect}
             selectedFunction={selectedFunction}
+            type={type || CallType.Old}
           />
         ))}
       </ListGroup>
@@ -215,6 +232,7 @@ function Calls({
             name={call.name}
             onSelect={onSelect}
             selectedFunction={selectedFunction}
+            type={type || CallType.New}
           />
         ))}
       </ListGroup>
@@ -223,9 +241,10 @@ function Calls({
 }
 
 Calls.propTypes = {
+  type: PropTypes.string,
   oldCalls: CallstackPropTypes.isRequired,
   newCalls: CallstackPropTypes,
-  selectedFunction: PropTypes.string,
+  selectedFunction: SelectedFunPropType,
   onSelect: PropTypes.func.isRequired,
 };
 
@@ -233,22 +252,34 @@ Calls.propTypes = {
  * Component for visualisation of call from call stack.
  * @param {Object} props
  * @param {string} props.name - Name of called function/macro/type.
- * @param {string} props.selectedFunction - Name of selected function.
- * @param {Function} props.onSelect - Callback function which is called
- * when call (function) is clicked (selected).
+ * @param {Object} props.selectedFunction - Function which is selected and should
+ *   be highlighted in the call stack.
+ * @param {Function} props.onSelect - Callback function accepting a selected function.
+ * @param {string} props.type - TypeCall of the call.
  * @returns
  */
-function Call({ name, selectedFunction, onSelect }) {
+function Call({
+  name,
+  selectedFunction,
+  onSelect,
+  type,
+}) {
   // putting information about type/macro under the name of function
   const nameWrap = name.replace(' ', '<br/>');
+  // Note: Currently checking if the function should be active only based on the name
+  // (kind is omitted). This solves special cases of function-macro/macro-function differences
+  // when we want to show their code at the same time.
+  // If there will be other situations when we want to show code of functions with different
+  // names simultaneously, then this needs to be reworked.
   return (
     <ListGroup.Item
       as="li"
       title={name}
       action
       className="callstack-call"
-      onClick={() => onSelect(name)}
-      active={name === selectedFunction}
+      onClick={() => onSelect({ name, type })}
+      active={name.split(' ')[0] === selectedFunction?.name.split(' ')[0]
+        && type === selectedFunction?.type}
       dangerouslySetInnerHTML={{ __html: nameWrap }}
     />
   );
@@ -256,6 +287,7 @@ function Call({ name, selectedFunction, onSelect }) {
 
 Call.propTypes = {
   name: PropTypes.string.isRequired,
-  selectedFunction: PropTypes.string,
+  selectedFunction: SelectedFunPropType,
   onSelect: PropTypes.func.isRequired,
+  type: PropTypes.string.isRequired,
 };

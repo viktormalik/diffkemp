@@ -15,7 +15,8 @@ export const DiffPropTypes = PropTypes.shape({
 });
 
 const DefinitionShape = {
-  kind: PropTypes.oneOf(['function', 'type']),
+  kind: PropTypes.oneOf(['function', 'type', 'macro', 'macro-function',
+    'function-macro', 'assembly']),
   old: PropTypes.shape({
     line: PropTypes.number,
     file: PropTypes.string,

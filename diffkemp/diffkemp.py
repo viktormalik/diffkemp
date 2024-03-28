@@ -651,9 +651,12 @@ def view(args):
         os.mkdir(data_directory)
 
     # Preparing source directory
-    source_directory = os.path.join(data_directory, "src")
-    if not os.path.exists(source_directory):
-        os.mkdir(source_directory)
+    dir_for_old_src = os.path.join(data_directory, "old-src")
+    dir_for_new_src = os.path.join(data_directory, "new-src")
+    if not os.path.exists(dir_for_old_src):
+        os.mkdir(dir_for_old_src)
+    if not os.path.exists(dir_for_new_src):
+        os.mkdir(dir_for_new_src)
     # Preparing diff directory
     diff_directory = os.path.join(data_directory, "diffs")
     if not os.path.exists(diff_directory):
@@ -672,28 +675,43 @@ def view(args):
             f"Error: expecting to find new snapshot in {new_snapshot_dir}\n")
         sys.exit(errno.EINVAL)
 
-    processed_files = set()
+    old_processed_files = set()
+    new_processed_files = set()
     for name, definition in yaml_result["definitions"].items():
         # Relatives paths to source files
-        old_file = definition["old"]["file"]
-        new_file = definition["new"]["file"]
-
-        old_file_abs_path = os.path.join(old_snapshot_dir, old_file)
-        new_file_abs_path = os.path.join(new_snapshot_dir, new_file)
+        old_file = definition["old"]["file"] if "old" in definition \
+            else None
+        new_file = definition["new"]["file"] if "new" in definition  \
+            else None
+        old_file_abs_path = os.path.join(old_snapshot_dir, old_file) \
+            if old_file else None
+        new_file_abs_path = os.path.join(new_snapshot_dir, new_file)  \
+            if new_file else None
 
         # Copy source file
-        if old_file not in processed_files:
-            processed_files.add(old_file)
+        if old_file is not None and old_file not in old_processed_files:
+            old_processed_files.add(old_file)
 
-            output_file_path = os.path.join(source_directory, old_file)
+            output_file_path = os.path.join(dir_for_old_src, old_file)
             output_dir_path = os.path.dirname(output_file_path)
             if not os.path.isdir(output_dir_path):
                 os.makedirs(output_dir_path)
 
             shutil.copy(old_file_abs_path, output_dir_path)
+        if new_file is not None and new_file not in new_processed_files:
+            new_processed_files.add(new_file)
+
+            output_file_path = os.path.join(dir_for_new_src, new_file)
+            output_dir_path = os.path.dirname(output_file_path)
+            if not os.path.isdir(output_dir_path):
+                os.makedirs(output_dir_path)
+
+            shutil.copy(new_file_abs_path, output_dir_path)
 
         # Make diff of function, add diff info to YAML
-        if "end-line" in definition["old"] and "end-line" in definition["new"]:
+        if (old_file is not None and new_file is not None and
+                "end-line" in definition["old"] and
+                "end-line" in definition["new"]):
             diff = unified_syntax_diff(first_file=old_file_abs_path,
                                        second_file=new_file_abs_path,
                                        first_line=definition["old"]["line"],
@@ -731,6 +749,7 @@ def view(args):
             except KeyboardInterrupt:
                 httpd.shutdown()
     # Cleaning
-    shutil.rmtree(source_directory)
+    shutil.rmtree(dir_for_old_src)
+    shutil.rmtree(dir_for_new_src)
     shutil.rmtree(diff_directory)
     os.remove(os.path.join(data_directory, YAML_FILE_NAME))

@@ -298,14 +298,26 @@ std::vector<std::unique_ptr<SyntaxDifference>>
                                               << elem.file << " on line "
                                               << elem.line << "\n");
             };
-
+            // Copying info about last macros definition for the 'user' so he
+            // knows where the difference was found (eg. for showing diff).
+            auto lastDefL = std::make_unique<Definition>(
+                    MacroUseL.second.def->name,
+                    MacroUseL.second.def->line,
+                    MacroUseL.second.def->sourceFile);
+            auto lastDefR = std::make_unique<Definition>(
+                    MacroUseR->second.def->name,
+                    MacroUseR->second.def->line,
+                    MacroUseR->second.def->sourceFile);
             result.push_back(std::make_unique<SyntaxDifference>(
+                    SyntaxDifference::SyntaxKind::MACRO,
                     MacroUseL.second.def->name,
                     MacroUseL.second.def->body.str(),
                     MacroUseR->second.def->body.str(),
                     StackL,
                     StackR,
-                    L->getFunction()->getName().str()));
+                    L->getFunction()->getName().str(),
+                    std::move(lastDefL),
+                    std::move(lastDefR)));
         }
     }
 
